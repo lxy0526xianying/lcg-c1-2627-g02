@@ -5,7 +5,7 @@ A.A. 2026/2027
 
 ## Membri del gruppo
 - 1
-- 2
+- Livia Catalfamo
 - 3
 - 4
 - 5
