@@ -9,9 +9,12 @@ const L_PERSONAGGIO = 80;
 const A_PERSONAGGIO = 100;
 // Velocità di movimento del personaggio 角色移动速度//
 const VEL_CORSA = 300;
+// Velocità di salto del personaggio 角色跳跃速度//
+const VEL_SALTO = 1000;
 // Impostazioni dei tasti 键盘按键设置//
 const TASTO_SX = PP.key_codes.LEFT;
 const TASTO_DX = PP.key_codes.RIGHT;
+const TASTO_SALTO = PP.key_codes.SPACE;
 
 
 let terreno;
@@ -79,6 +82,16 @@ function crea_personaggio(s) {
 
 }
 
+function salta(s) {
+
+    if (PP.interactive.kb.is_key_down(s, TASTO_SALTO)&& PP.physics.is_on_ground(personaggio)) {
+
+        PP.physics.set_velocity_y(
+            personaggio,
+            -VEL_SALTO
+        );
+    }
+}
 
 function cammina(s) {
 
@@ -110,6 +123,7 @@ function cammina(s) {
 
 function update(s) {
     cammina(s);
+    salta(s);
 }
 
 
