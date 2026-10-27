@@ -1,8 +1,18 @@
 const COLORE_TERRENO = "0xB96E54";
 const COLORE_PERSONAGGIO = "0xE44A4A";
+// piataforma平台 //
+const MARRONE = "0x8B5A2B";
+const L_PIATTAFORMA = 192;
+const A_PIATTAFORMA = 21;
+const X_PIATTAFORMA = 1740;
+const Y_PIATTAFORMA = 456;
 
 const A_TERRENO = 96;
 const Y_TERRENO = 624;
+// Lunghezza del livello关卡长度//
+const L_LIVELLO = 3840;
+// Prospettiva anticipata提前、预留视野 //
+const ANTICIPO_CAMERA = 200;
 
 const X_PERSONAGGIO = 200;
 const L_PERSONAGGIO = 80;
@@ -16,7 +26,6 @@ const TASTO_SX = PP.key_codes.LEFT;
 const TASTO_DX = PP.key_codes.RIGHT;
 const TASTO_SALTO = PP.key_codes.SPACE;
 
-
 let terreno;
 let personaggio;
 
@@ -27,19 +36,22 @@ function preload(s) {}
 function create(s) {
     crea_terreno(s);
     crea_personaggio(s);
+    crea_camera(s);
+    crea_piattaforma(s);
 }
 
 
 function crea_terreno(s) {
 // Crea rettangolo del terreno 创建地面矩形 //
+// s,x,y, Larghezza宽度, Altezza高度, Colore颜色, Trasparenza透明度//
     terreno = PP.shapes.rectangle_add(
-        s,
-        LARGHEZZA / 2,
-        Y_TERRENO + A_TERRENO / 2,
-        LARGHEZZA,
-        A_TERRENO,
-        COLORE_TERRENO,
-        1
+       s, 
+       L_LIVELLO / 2, 
+       Y_TERRENO + A_TERRENO / 2,
+       L_LIVELLO, 
+       A_TERRENO, 
+       COLORE_TERRENO, 
+       1
     );
 // Aggiungi fisica al terreno 给地面添加物理属性 //
     PP.physics.add(
@@ -117,6 +129,31 @@ function cammina(s) {
         );
 
     }
+
+}
+// Crea la camera 创建摄像机 //
+function crea_camera(s) {
+    // Imposta i limiti del mondo Imposta i limiti del mondo物理世界的范围 //
+    PP.physics.set_world_bounds(s, 0, 0, L_LIVELLO, ALTEZZA);
+    PP.camera.set_bounds(s, 0, 0, L_LIVELLO, ALTEZZA);
+    // Imposta la camera per seguire il personaggio 设置摄像机跟随角色 //
+    PP.camera.start_follow(s, personaggio, -ANTICIPO_CAMERA, 0);
+
+}
+
+function crea_piattaforma(s) {
+// s,x,y, Larghezza宽度, Altezza高度, Colore颜色, Trasparenza透明度//
+     let piattaforma = PP.shapes.rectangle_add(
+        s,
+        X_PIATTAFORMA, 
+        Y_PIATTAFORMA,
+        L_PIATTAFORMA, 
+        A_PIATTAFORMA, 
+        MARRONE, 
+        1
+    );
+    PP.physics.add(s, piattaforma, PP.physics.type.STATIC);
+    PP.physics.add_collider(s, personaggio, piattaforma);
 
 }
 
