@@ -19,15 +19,42 @@ const L_PERSONAGGIO = 80;
 const A_PERSONAGGIO = 100;
 // Velocità di movimento del personaggio 角色移动速度//
 const VEL_CORSA = 300;
+// attrito del personaggio 角色摩擦力//
+const ATTRITO = 1200;
+// Numero massimo di salti del personaggio 角色最大跳跃次数//
+const SALTI_MAX = 2;
 // Velocità di salto del personaggio 角色跳跃速度//
 const VEL_SALTO = 1000;
 // Impostazioni dei tasti 键盘按键设置//
 const TASTO_SX = PP.key_codes.LEFT;
 const TASTO_DX = PP.key_codes.RIGHT;
 const TASTO_SALTO = PP.key_codes.SPACE;
+// Barra dell'acqua 水量条 //
+const ACQUA_MAX = 100;
+// Larghezza quando la striscia d'acqua è piena 水量条满时的宽度 //
+const L_BARRA_ACQUA = 200;
+const A_BARRA_ACQUA = 20;
+const X_BARRA_ACQUA = 120;
+const Y_BARRA_ACQUA = 40;
+const COLORE_ACQUA = "0x4A90E2";
+const X_INIZIO_BARRA_ACQUA = 20;
+// Bottiglia d'acqua水瓶 //
+const L_BOTTIGLIA = 20;
+const A_BOTTIGLIA = 30;
+const COLORE_BOTTIGLIA = "0x00BFFF";
+// Posizione della bottiglia d'acqua水瓶位置 //
+const X_BOTTIGLIA = X_PIATTAFORMA;
+const Y_BOTTIGLIA = Y_PIATTAFORMA - A_PIATTAFORMA / 2 - A_BOTTIGLIA / 2;
+// Quantità d'acqua che può essere versata nell'acquario水瓶可以加的水量值 //
+const ACQUA_BOTTIGLIA = 20;
 
+let acqua = ACQUA_MAX;
+let barra_acqua;
+
+let salti = 0;
 let terreno;
 let personaggio;
+let bottiglia;
 
 // Caricamento delle risorse del gioco 加载游戏资源 //
 function preload(s) {}
@@ -38,8 +65,89 @@ function create(s) {
     crea_personaggio(s);
     crea_camera(s);
     crea_piattaforma(s);
+    crea_barra_acqua(s);
+    crea_bottiglia(s);
+// Scenario,Intervallo di tempo（1000ms = 1s）,Funzione da eseguire, Ripetere o meno // 场景、时间间隔、要执行的函数、是否重复 //
+    PP.timers.add_timer(
+        s,
+        1000,
+        consuma_acqua,
+        true
+    );
+}
+// Raccogli acqua拾取水瓶 //
+function raccogli_acqua(s, a, b) {
+    acqua += ACQUA_BOTTIGLIA;
+    if (acqua > ACQUA_MAX) {
+        acqua = ACQUA_MAX;
+    }
+
+    aggiorna_barra_acqua();
+    // Distruggi la bottiglia d'acqua销毁水瓶 //
+    PP.shapes.destroy(b);
 }
 
+function crea_bottiglia(s) {
+
+    bottiglia = PP.shapes.rectangle_add(
+        s,
+        X_BOTTIGLIA,
+        Y_BOTTIGLIA,
+        L_BOTTIGLIA,
+        A_BOTTIGLIA,
+        COLORE_BOTTIGLIA,
+        1
+    );
+
+    PP.physics.add(
+        s,
+        bottiglia,
+        PP.physics.type.STATIC
+    );
+// Aggiungi overlap tra il personaggio e la bottiglia 添加角色与水瓶的重叠检测 //
+    PP.physics.add_overlap_f(
+        s,
+        personaggio,
+        bottiglia,
+        raccogli_acqua
+    );
+}
+
+// aqua水 //
+function crea_barra_acqua(s) {
+
+    barra_acqua = PP.shapes.rectangle_add(
+        s,
+        X_BARRA_ACQUA,
+        Y_BARRA_ACQUA,
+        L_BARRA_ACQUA,
+        A_BARRA_ACQUA,
+        COLORE_ACQUA,
+        1
+    );
+    // Imposta la barra dell'acqua per rimanere fissa sullo schermo 设置水量条固定在屏幕上 //
+    barra_acqua.tile_geometry.scroll_factor_x = 0;
+    barra_acqua.tile_geometry.scroll_factor_y = 0;
+}
+// Consuma acqua消耗水量 //
+function consuma_acqua(s) {
+
+    if (acqua > 0) {
+        acqua -= 1;
+    }
+    aggiorna_barra_acqua();
+}
+// Aggiorna la barra dell'acqua 更新水量条 //
+function aggiorna_barra_acqua() {
+  // Calcola la percentuale di acqua rimanente 计算剩余水量的比例 //
+    let scala = acqua / ACQUA_MAX;
+    barra_acqua.geometry.scale_x = scala;
+    // Sposta il centro della barra verso sinistra mentre si accorcia //
+    // 水量条变短时让中心点向左移动 //
+    barra_acqua.geometry.x =
+    // Mantiene fisso il lato sinistro 保持左边固定 //
+        20 + (L_BARRA_ACQUA * scala) / 2;
+}
 
 function crea_terreno(s) {
 // Crea rettangolo del terreno 创建地面矩形 //
@@ -91,17 +199,31 @@ function crea_personaggio(s) {
         personaggio,
         terreno
     );
+    // Imposta l'attrito del personaggio 设置角色摩擦力 //
+    PP.physics.set_drag_x(
+        personaggio, 
+        ATTRITO
+    );
 
 }
 
 function salta(s) {
 
-    if (PP.interactive.kb.is_key_down(s, TASTO_SALTO)&& PP.physics.is_on_ground(personaggio)) {
+    if (PP.physics.is_on_ground(personaggio)) {
+        salti = 0;
+    }
+    // Salto del personaggio 角色跳跃 //
+    if (
+        PP.interactive.kb.is_key_just_down(s, TASTO_SALTO)
+        && salti < SALTI_MAX
+    ) {
 
         PP.physics.set_velocity_y(
             personaggio,
             -VEL_SALTO
         );
+    // Ciclo 循环 //
+        salti += 1;
     }
 }
 
@@ -120,16 +242,7 @@ function cammina(s) {
             personaggio,
             VEL_CORSA
         );
-
-    } else {
-
-        PP.physics.set_velocity_x(
-            personaggio,
-            0
-        );
-
-    }
-
+    } 
 }
 // Crea la camera 创建摄像机 //
 function crea_camera(s) {
