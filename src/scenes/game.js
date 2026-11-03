@@ -70,7 +70,7 @@ function create(s) {
 // Scenario,Intervallo di tempo（1000ms = 1s）,Funzione da eseguire, Ripetere o meno // 场景、时间间隔、要执行的函数、是否重复 //
     PP.timers.add_timer(
         s,
-        5000,
+        1000,
         consuma_acqua,
         true
     );
