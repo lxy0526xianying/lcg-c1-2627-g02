@@ -7,16 +7,16 @@ const A_PIATTAFORMA = 21;
 const X_PIATTAFORMA = 1740;
 const Y_PIATTAFORMA = 456;
 
-const A_TERRENO = 96;
-const Y_TERRENO = 624;
+const A_TERRENO = 160;
+const Y_TERRENO = 560;
 // Lunghezza del livello关卡长度//
 const L_LIVELLO = 3840;
 // Prospettiva anticipata提前、预留视野 //
 const ANTICIPO_CAMERA = 200;
 
-const X_PERSONAGGIO = 200;
-const L_PERSONAGGIO = 80;
-const A_PERSONAGGIO = 100;
+const X_PERSONAGGIO = 240;
+const L_PERSONAGGIO = 160;
+const A_PERSONAGGIO = 160;
 // Velocità di movimento del personaggio 角色移动速度//
 const VEL_CORSA = 300;
 // attrito del personaggio 角色摩擦力//
