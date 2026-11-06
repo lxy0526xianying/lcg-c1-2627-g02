@@ -50,6 +50,15 @@ const COLORE_BOTTIGLIA = "0x00BFFF";
 const X_BOTTIGLIA = X_PIATTAFORMA;
 const Y_BOTTIGLIA = Y_PIATTAFORMA - A_PIATTAFORMA / 2 - A_BOTTIGLIA / 2;
 
+// Testo "Premi E per bere" 喝水提示文字 //
+// Posizionato sopra la testa del personaggio in piedi sulla piattaforma //
+// 放在站在平台上的角色头顶上方，随角色高度自动调整，避免重叠 //
+const MARGINE_TESTO_BERE = 10;
+const Y_TESTO_BERE = Y_PIATTAFORMA - A_PIATTAFORMA / 2 - A_PERSONAGGIO - MARGINE_TESTO_BERE;
+const DIM_TESTO_BERE = 16;
+const COLORE_TESTO_BERE = "0xFFFFFF";
+const SFONDO_TESTO_BERE = "0x333333";
+
 let acqua = ACQUA_MAX;
 let barra_acqua;
 
@@ -95,7 +104,7 @@ function bere_acqua() {
     }
 
     if (testo_bere) {
-        testo_bere.destroy();
+        PP.shapes.destroy(testo_bere);
         testo_bere = null;
     }
 
@@ -119,17 +128,22 @@ function crea_bottiglia(s) {
         PP.physics.type.STATIC
     );
 
-    testo_bere = s.add.text(
-        X_BOTTIGLIA - 50,
-        Y_BOTTIGLIA - 50,
+    // Testo creato con PoliPhaser, centrato sopra la bottiglia 用 PoliPhaser 创建文字，居中显示在水瓶上方 //
+    testo_bere = PP.shapes.text_styled_add(
+        s,
+        X_BOTTIGLIA,
+        Y_TESTO_BERE,
         "Premi E per bere",
-        {
-            fontSize: "16px",
-            fill: "#FFFFFF"
-        }
+        DIM_TESTO_BERE,
+        "Arial",
+        "normal",
+        COLORE_TESTO_BERE,
+        SFONDO_TESTO_BERE,
+        0.5,
+        1
     );
- 
-    testo_bere.setVisible(false);
+
+    testo_bere.visibility.hidden = true;
 }
 
 // Funzione per controllare la vicinanza del personaggio alla bottiglia
@@ -143,15 +157,15 @@ function controlla_bottiglia(s) {
         // Se la distanza è inferiore a 80 pixel, il giocatore è abbastanza vicino
         if (distanza < 80) {
             vicino_bottiglia = true;
-            testo_bere.setVisible(true);
+            testo_bere.visibility.hidden = false;
         } else {
             vicino_bottiglia = false;
-            testo_bere.setVisible(false);
+            testo_bere.visibility.hidden = true;
         }
     } else {
         vicino_bottiglia = false;
         if (testo_bere) {
-            testo_bere.setVisible(false);
+            testo_bere.visibility.hidden = true;
         }
     }
 }
@@ -189,7 +203,7 @@ function aggiorna_barra_acqua() {
     // 水量条变短时让中心点向左移动 //
     barra_acqua.geometry.x =
     // Mantiene fisso il lato sinistro 保持左边固定 //
-        20 + (L_BARRA_ACQUA * scala) / 2;
+        X_INIZIO_BARRA_ACQUA + (L_BARRA_ACQUA * scala) / 2;
 }
 
 function crea_terreno(s) {
@@ -280,8 +294,8 @@ function cammina(s) {
 
 // Crea la camera 创建摄像机 //
 function crea_camera(s) {
-    PP.physics.set_world_bounds(s, 0, 0, L_LIVELLO, 720);
-    PP.camera.set_bounds(s, 0, 0, L_LIVELLO, 720);
+    PP.physics.set_world_bounds(s, 0, 0, L_LIVELLO, ALTEZZA);
+    PP.camera.set_bounds(s, 0, 0, L_LIVELLO, ALTEZZA);
     // Imposta la camera per seguire il personaggio 设置摄像机跟随角色 //
     PP.camera.start_follow(s, personaggio, -ANTICIPO_CAMERA, 0);
 }
