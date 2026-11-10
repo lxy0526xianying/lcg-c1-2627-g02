@@ -253,14 +253,12 @@ function salta(s) {
     // Salto del personaggio 角色跳跃 //
     if (
         PP.interactive.kb.is_key_just_down(s, TASTO_SALTO)
-        && salti < SALTI_MAX
+        && PP.physics.is_on_ground(personaggio)
     ) {
         PP.physics.set_velocity_y(
             personaggio,
             -VEL_SALTO
         );
-        // Ciclo 循环 //
-        salti += 1;
     }
 }
 
