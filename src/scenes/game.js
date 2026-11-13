@@ -7,16 +7,16 @@ const A_PIATTAFORMA = 21;
 const X_PIATTAFORMA = 1740;
 const Y_PIATTAFORMA = 456;
 
-const A_TERRENO = 160;
-const Y_TERRENO = 560;
+const A_TERRENO = 120;
+const Y_TERRENO = 600;
 // Lunghezza del livello关卡长度//
 const L_LIVELLO = 3840;
 // Prospettiva anticipata提前、预留视野 //
 const ANTICIPO_CAMERA = 200;
 
-const X_PERSONAGGIO = 240;
-const L_PERSONAGGIO = 160;
-const A_PERSONAGGIO = 160;
+const X_PERSONAGGIO = 180;
+const L_PERSONAGGIO = 120;
+const A_PERSONAGGIO = 120;
 // Velocità di movimento del personaggio 角色移动速度//
 const VEL_CORSA = 300;
 // attrito del personaggio 角色摩擦力//
@@ -264,16 +264,18 @@ function salta(s) {
     if (PP.physics.is_on_ground(personaggio)) {
         salti = 0;
     }
-    // Salto del personaggio 角色跳跃 //
+
     if (
         PP.interactive.kb.is_key_just_down(s, TASTO_SALTO)
-        && PP.physics.is_on_ground(personaggio)
+        && salti < SALTI_MAX
     ) {
         PP.physics.set_velocity_y(
             personaggio,
             -VEL_SALTO
         );
+        salti += 1;
     }
+
 }
 
 function cammina(s) {
