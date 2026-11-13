@@ -1,16 +1,12 @@
-const COLORE_TERRENO = "0xB96E54";
 const COLORE_PERSONAGGIO = "0xE44A4A";
-// piattaforma平台 //
-const MARRONE = "0x8B5A2B";
-const L_PIATTAFORMA = 192;
-const A_PIATTAFORMA = 21;
-const X_PIATTAFORMA = 1740;
-const Y_PIATTAFORMA = 456;
 
-const A_TERRENO = 120;
+const QUADRATO = 120;
+const QUADRATINO = 40;   // 一个青色小格子 = 40px
+const L_LIVELLO = 232 * QUADRATO;   // = 27840
+const A_LIVELLO = 12 * QUADRATO;   // 关卡高度 = 1440
+
 const Y_TERRENO = 600;
 // Lunghezza del livello关卡长度//
-const L_LIVELLO = 3840;
 // Prospettiva anticipata提前、预留视野 //
 const ANTICIPO_CAMERA = 200;
 
@@ -42,45 +38,54 @@ const Y_BARRA_ACQUA = 40;
 const COLORE_ACQUA = "0x4A90E2";
 const X_INIZIO_BARRA_ACQUA = 20;
 
-// Bottiglia d'acqua水瓶 //
-const L_BOTTIGLIA = 20;
-const A_BOTTIGLIA = 30;
-const COLORE_BOTTIGLIA = "0x00BFFF";
-// Posizione della bottiglia d'acqua水瓶位置 //
-const X_BOTTIGLIA = X_PIATTAFORMA;
-const Y_BOTTIGLIA = Y_PIATTAFORMA - A_PIATTAFORMA / 2 - A_BOTTIGLIA / 2;
-
-// Testo "Premi E per bere" 喝水提示文字 //
-// Posizionato sopra la testa del personaggio in piedi sulla piattaforma //
-// 放在站在平台上的角色头顶上方，随角色高度自动调整，避免重叠 //
-const MARGINE_TESTO_BERE = 10;
-const Y_TESTO_BERE = Y_PIATTAFORMA - A_PIATTAFORMA / 2 - A_PERSONAGGIO - MARGINE_TESTO_BERE;
-const DIM_TESTO_BERE = 16;
-const COLORE_TESTO_BERE = "0xFFFFFF";
-const SFONDO_TESTO_BERE = "0x333333";
-
 let acqua = ACQUA_MAX;
 let barra_acqua;
 
 let salti = 0;
-let terreno;
 let personaggio;
-let bottiglia;
 
 let vicino_bottiglia = false;
 let testo_bere;
+let img_terreno;
+let img_verde;
+let img_piattaforma;
+let img_piattaforma_tempo;
+let img_villager;
+let img_tubo;
+let img_edificio
+let img_acqua_tossica;
+let img_ossa;
+let img_casa;
+let img_oasi;
+let offset_camera_y = 180;
+const X_INIZIO_SOTTERRANEO = 81 * QUADRATO;    // 地下开始（左边的墙）
+const X_FINE_SOTTERRANEO   = 122 * QUADRATO;   // 地下结束（右边的墙）
 
 // Caricamento delle risorse del gioco 加载游戏资源 //
-function preload(s) {}
+function preload(s) {
+    img_terreno = PP.assets.image.load_color(s, "0xF0D978", 120, 120);  // 黄
+    img_verde = PP.assets.image.load_color(s, "0x76B08A", 120, 120);  // 绿
+    img_piattaforma = PP.assets.image.load_color(s, "0xE36BD6", 120, 40);
+    img_piattaforma_tempo = PP.assets.image.load_color(s, "0x9C60F6", 40, 40);
+    img_villager = PP.assets.image.load_color(s, "0xFF8C00", 120, 120);
+    img_tubo = PP.assets.image.load_color(s, "0x8EAB4E", 120, 120);
+    img_edificio = PP.assets.image.load_color(s, "0x968C8C", 120, 120);
+    img_acqua_tossica = PP.assets.image.load_color(s, "0x1E3529", 120, 120);  // 黑色的毒水
+    img_ossa = PP.assets.image.load_color(s, "0xF2DFB0", 40, 40);  // 会沉的骨头
+    img_casa = PP.assets.image.load_color(s, "0xE36BD6", 120, 120);  // 第二个村庄的建筑（粉色）
+    img_oasi = PP.assets.image.load_color(s, "0xA3EAE2", 120, 120);  // 最后的绿洲水（浅蓝绿）
+}
 
 // Crea oggetto创建物品 //
 function create(s) {
-    crea_terreno(s);
+    crea_villager(s, 64, 4);   // ① 先画村民 → 在下层
+    // 第二个村庄的建筑（也要在角色之前创建，这样角色从它前面走过）
+    crea_casa(s, 140, 3, 1, 2);   // 矮的那一块
+    crea_casa(s, 141, 2, 4, 3);   // 高的那一块
     crea_personaggio(s);
+    crea_mappa(s);
     crea_camera(s);
-    crea_piattaforma(s);
     crea_barra_acqua(s);
-    crea_bottiglia(s);
 
     // Scenario,Intervallo di tempo（1000ms = 1s）,Funzione da eseguire, Ripetere o meno // 场景、时间间隔、要执行的函数、是否重复 //
     PP.timers.add_timer(
@@ -91,84 +96,178 @@ function create(s) {
     );
 }
 
-// Raccogli acqua拾取水瓶 //
-function bere_acqua() {
-    // Ripristina la barra dell'acqua al massimo
-    acqua = ACQUA_MAX;
-
-    aggiorna_barra_acqua();
-
-    if (bottiglia != null) {
-        PP.shapes.destroy(bottiglia);
-        bottiglia = null;
-    }
-
-    if (testo_bere) {
-        PP.shapes.destroy(testo_bere);
-        testo_bere = null;
-    }
-
-    vicino_bottiglia = false;
+function crea_blocco(s, immagine, colonna, riga, larghezza, altezza) {
+    // 1. 铺图：把格子数换算成像素（格子数 × 120）
+    let blocco = PP.assets.tilesprite.add(
+        s,
+        immagine,
+        colonna * QUADRATO,     // x：左上角
+        riga * QUADRATO,        // y：左上角
+        larghezza * QUADRATO,   // 宽
+        altezza * QUADRATO,     // 高
+        0, 0                    // pivot 0,0 = x、y 指的是左上角
+    );
+    // 2. 加物理（不会动的）
+    PP.physics.add(s, blocco, PP.physics.type.STATIC);
+    // 3. 让角色能站上去 / 撞到它
+    PP.physics.add_collider(s, personaggio, blocco);
 }
 
-function crea_bottiglia(s) {
-    bottiglia = PP.shapes.rectangle_add(
+function crea_piattaforma_fissa(s, colonna, riga, larghezza) {
+    let piattaforma = PP.assets.tilesprite.add(
         s,
-        X_BOTTIGLIA,
-        Y_BOTTIGLIA,
-        L_BOTTIGLIA,
-        A_BOTTIGLIA,
-        COLORE_BOTTIGLIA,
-        1
+        img_piattaforma,
+        colonna * QUADRATINO,     // x：左上角
+        riga * QUADRATINO,        // y：左上角
+        larghezza * QUADRATINO,   // 宽
+        QUADRATINO,               // 高：平台固定 1 小格
+        0, 0
     );
-
-    PP.physics.add(
-        s,
-        bottiglia,
-        PP.physics.type.STATIC
-    );
-
-    // Testo creato con PoliPhaser, centrato sopra la bottiglia 用 PoliPhaser 创建文字，居中显示在水瓶上方 //
-    testo_bere = PP.shapes.text_styled_add(
-        s,
-        X_BOTTIGLIA,
-        Y_TESTO_BERE,
-        "Premi E per bere",
-        DIM_TESTO_BERE,
-        "Arial",
-        "normal",
-        COLORE_TESTO_BERE,
-        SFONDO_TESTO_BERE,
-        0.5,
-        1
-    );
-
-    testo_bere.visibility.hidden = true;
+    PP.physics.add(s, piattaforma, PP.physics.type.STATIC);
+    PP.physics.add_collider(s, personaggio, piattaforma);
 }
 
-// Funzione per controllare la vicinanza del personaggio alla bottiglia
-function controlla_bottiglia(s) {
-    if (bottiglia != null) {
-        let distanza = Phaser.Math.Distance.Between(
-            personaggio.geometry.x, personaggio.geometry.y,
-            X_BOTTIGLIA, Y_BOTTIGLIA
-        );
-
-        // Se la distanza è inferiore a 80 pixel, il giocatore è abbastanza vicino
-        if (distanza < 80) {
-            vicino_bottiglia = true;
-            testo_bere.visibility.hidden = false;
-        } else {
-            vicino_bottiglia = false;
-            testo_bere.visibility.hidden = true;
-        }
-    } else {
-        vicino_bottiglia = false;
-        if (testo_bere) {
-            testo_bere.visibility.hidden = true;
-        }
-    }
+function crea_piattaforma_a_tempo(s, colonna, riga, larghezza) {
+    let piattaforma = PP.assets.tilesprite.add(
+        s,
+        img_piattaforma_tempo,      // ← 唯一的区别：用紫色的图
+        colonna * QUADRATINO,
+        riga * QUADRATINO,
+        larghezza * QUADRATINO,
+        QUADRATINO,
+        0, 0
+    );
+    PP.physics.add(s, piattaforma, PP.physics.type.STATIC);
+    PP.physics.add_collider(s, personaggio, piattaforma);
 }
+
+function crea_villager(s, colonna, riga) {
+    PP.assets.image.add(
+        s,
+        img_villager,
+        colonna * QUADRATO,
+        riga * QUADRATO,
+        0, 0
+    );
+}
+
+function crea_tubo(s, colonna, riga, larghezza, altezza) {
+    PP.assets.tilesprite.add(
+        s,
+        img_tubo,
+        colonna * QUADRATO,
+        riga * QUADRATO,
+        larghezza * QUADRATO,   // 宽
+        altezza * QUADRATO, 
+        0, 0
+    );
+}
+
+// 毒水里会沉下去的骨头（现在先当普通平台，高 2 小格，用小格子算）
+function crea_ossa(s, colonna, riga, larghezza) {
+    let ossa = PP.assets.tilesprite.add(
+        s,
+        img_ossa,
+        colonna * QUADRATINO,
+        riga * QUADRATINO,
+        larghezza * QUADRATINO,
+        2 * QUADRATINO,           // 高：骨头固定 2 小格
+        0, 0
+    );
+    PP.physics.add(s, ossa, PP.physics.type.STATIC);
+    PP.physics.add_collider(s, personaggio, ossa);
+}
+
+// 村庄的建筑：只是图，不加物理，所以角色能直接穿过去
+function crea_casa(s, colonna, riga, larghezza, altezza) {
+    PP.assets.tilesprite.add(
+        s,
+        img_casa,
+        colonna * QUADRATO,       // x：左上角
+        riga * QUADRATO,          // y：左上角
+        larghezza * QUADRATO,     // 宽
+        altezza * QUADRATO,       // 高
+        0, 0
+    );
+}
+
+function crea_mappa(s) {
+    //          场景  图片           列   行  宽  高
+    crea_blocco(s, img_terreno,     0,  5,  8,  1);   // 地面1
+    crea_blocco(s, img_verde,       8,  5,  2,  1);   // 绿色块
+    crea_blocco(s, img_terreno,    10,  5, 12,  1);   // 地面2
+    crea_blocco(s, img_terreno,    13,  4,  6,  1);   // 台阶下层
+    crea_blocco(s, img_terreno,    15,  3,  3,  1);   // 台阶上层
+    crea_blocco(s, img_verde,      22,  5, 16,  1);
+    crea_blocco(s, img_terreno,    38,  5, 4,  1);
+    crea_blocco(s, img_verde,      42,  5, 4,  1);
+    crea_blocco(s, img_terreno,    46,  5, 35,  1);
+    crea_blocco(s, img_terreno,  81,  6,  1,  3);   // 墙
+    crea_blocco(s, img_terreno,  82,  8,  1,  1);   // 台阶
+    crea_blocco(s, img_terreno,  82,  9,  4,  1);   // 横的那块
+    crea_blocco(s, img_terreno,  85, 10,  1,  2);   // 往下的柱子
+    // —— 右边（和左边左右对称）——
+    crea_blocco(s, img_terreno, 121,  6,  1,  3);   // 墙
+    crea_blocco(s, img_terreno, 120,  8,  1,  1);   // 台阶
+    crea_blocco(s, img_terreno, 117,  9,  4,  1);   // 横的那块
+    crea_blocco(s, img_terreno, 117, 10,  1,  2);
+
+    crea_tubo(s, 72,  4, 9,  1);
+
+    crea_piattaforma_fissa(s,  70, 11, 3);
+    crea_piattaforma_fissa(s,  78,  8, 3);
+    crea_piattaforma_fissa(s,  85, 14, 6);
+    crea_piattaforma_fissa(s,  96,  9, 6);
+    crea_piattaforma_fissa(s, 107, 12, 3);
+    crea_piattaforma_fissa(s, 216, 11, 12);
+    crea_piattaforma_fissa(s, 261, 24,  4);
+    crea_piattaforma_fissa(s, 276, 26,  6);
+    crea_piattaforma_fissa(s, 297, 29, 12);   // 中间那个上面有水的
+    crea_piattaforma_fissa(s, 321, 22,  6);
+    crea_piattaforma_fissa(s, 341, 23,  4);
+
+    // —— 紫色平台 ——
+    crea_piattaforma_a_tempo(s, 129, 11, 3);
+    crea_piattaforma_a_tempo(s, 268, 21, 5);
+    crea_piattaforma_a_tempo(s, 288, 23, 4);
+    crea_piattaforma_a_tempo(s, 315, 26, 3);
+    crea_piattaforma_a_tempo(s, 332, 26, 4);
+    crea_piattaforma_a_tempo(s, 333, 18, 4);
+    crea_piattaforma_a_tempo(s, 347, 27, 3);
+
+    crea_blocco(s, img_edificio, 76, 0, 51, 4);
+
+    // ========== 从地下出来以后（右边的出口）==========
+    //          场景  图片            列   行  宽  高
+    crea_tubo(s,                   122,  4,  9,  1);      // 右边的管子
+    crea_blocco(s, img_terreno,    122,  5, 12,  1);      // 管子下面的地面
+    crea_piattaforma_fissa(s, 381, 11, 12);               // 管子上的粉色平台（小格子）
+    crea_blocco(s, img_verde,      134,  5,  3,  1);      // 绿色的水
+    crea_blocco(s, img_terreno,    137,  5, 24,  1);      // 地面
+
+    // ========== Oasi（毒水和骨头）==========
+    crea_blocco(s, img_terreno,    156,  4,  5,  1);      // 毒水前面：下层
+    crea_blocco(s, img_terreno,    158,  3,  5,  1);      // 毒水前面：上层
+    crea_blocco(s, img_acqua_tossica, 161, 5, 30,  1);    // 黑色的毒水
+
+    // 会沉的骨头（小格子）  列   行  宽
+    crea_ossa(s,            495, 14, 15);
+    crea_ossa(s,            520, 14,  6);
+    crea_ossa(s,            532, 14,  3);
+    crea_ossa(s,            546, 14,  3);
+    crea_ossa(s,            554, 14,  1);
+    crea_ossa(s,            564, 14,  7);
+
+    // 毒水后面
+    crea_blocco(s, img_terreno,    190,  3,  5,  1);      // 上层
+    crea_blocco(s, img_terreno,    192,  4,  5,  1);      // 下层
+    crea_blocco(s, img_terreno,    191,  5, 31,  1);      // 地面
+    crea_blocco(s, img_oasi,       222,  5,  8,  1);      // 最后的绿洲水（oasi）
+    crea_blocco(s, img_terreno,    230,  5,  2,  1);      // 关卡最后一小段地面
+    // 上层上面的一小片脏水：只是图，不加碰撞
+    PP.assets.tilesprite.add(s, img_verde, 190 * QUADRATO, 3 * QUADRATO, 4 * QUADRATO, QUADRATINO, 0, 0);
+}
+
 
 // aqua水 //
 function crea_barra_acqua(s) {
@@ -206,24 +305,6 @@ function aggiorna_barra_acqua() {
         X_INIZIO_BARRA_ACQUA + (L_BARRA_ACQUA * scala) / 2;
 }
 
-function crea_terreno(s) {
-    // Crea rettangolo del terreno 创建地面矩形 //
-    terreno = PP.shapes.rectangle_add(
-       s, 
-       L_LIVELLO / 2, 
-       Y_TERRENO + A_TERRENO / 2,
-       L_LIVELLO, 
-       A_TERRENO, 
-       COLORE_TERRENO, 
-       1
-    );
-    // Aggiungi fisica al terreno 给地面添加物理属性 //
-    PP.physics.add(
-        s,
-        terreno,
-        PP.physics.type.STATIC
-    );
-}
 
 function crea_personaggio(s) {
     // Crea rettangolo del personaggio 创建角色矩形 //
@@ -246,12 +327,6 @@ function crea_personaggio(s) {
     PP.physics.set_collide_world_bounds(
         personaggio,
         true
-    );
-    // Aggiungi collider tra il personaggio e il terreno 添加角色与地面碰撞检测 //
-    PP.physics.add_collider(
-        s,
-        personaggio,
-        terreno
     );
     // Imposta l'attrito del personaggio 设置角色摩擦力 //
     PP.physics.set_drag_x(
@@ -294,37 +369,30 @@ function cammina(s) {
 
 // Crea la camera 创建摄像机 //
 function crea_camera(s) {
-    PP.physics.set_world_bounds(s, 0, 0, L_LIVELLO, ALTEZZA);
-    PP.camera.set_bounds(s, 0, 0, L_LIVELLO, ALTEZZA);
+    PP.physics.set_world_bounds(s, 0, 0, L_LIVELLO, A_LIVELLO);
+    PP.camera.set_bounds(s, 0, 0, L_LIVELLO, A_LIVELLO);
     // Imposta la camera per seguire il personaggio 设置摄像机跟随角色 //
-    PP.camera.start_follow(s, personaggio, -ANTICIPO_CAMERA, 0);
+    PP.camera.start_follow(s, personaggio, -ANTICIPO_CAMERA, 180);
 }
+function aggiorna_camera(s) {
+    let x = personaggio.geometry.x;
+    let obiettivo;
 
-function crea_piattaforma(s) {
-     let piattaforma = PP.shapes.rectangle_add(
-        s,
-        X_PIATTAFORMA, 
-        Y_PIATTAFORMA,
-        L_PIATTAFORMA, 
-        A_PIATTAFORMA, 
-        MARRONE, 
-        1
-    );
-    PP.physics.add(s, piattaforma, PP.physics.type.STATIC);
-    PP.physics.add_collider(s, personaggio, piattaforma);
+    // 角色的 x 在地下的左右范围之内 → 在地下
+    if (x > X_INIZIO_SOTTERRANEO && x < X_FINE_SOTTERRANEO) {
+        obiettivo = 0;      // 地下（原来 -120，太低了）
+    } else {
+        obiettivo = 180;    // 地上
+    }
+
+    offset_camera_y = offset_camera_y + (obiettivo - offset_camera_y) * 0.08;
+    PP.camera.set_follow_offset(s, -ANTICIPO_CAMERA, offset_camera_y);
 }
 
 function update(s) {
     cammina(s);
     salta(s);
-
-    // Controlla la vicinanza alla bottiglia e gestisce l'avviso
-    controlla_bottiglia(s);
-
-    // Se è vicino e preme il tasto E, beve l'acqua
-    if (vicino_bottiglia && PP.interactive.kb.is_key_just_down(s, TASTO_E)) {
-        bere_acqua();
-    }
+    aggiorna_camera(s); 
 }
 
 function destroy(s) {}
