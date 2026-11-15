@@ -64,7 +64,7 @@ const X_FINE_SOTTERRANEO   = 122 * QUADRATO;   // 地下结束（右边的墙）
 
 // Caricamento delle risorse del gioco 加载游戏资源 //
 function preload(s) {
-    img_terreno = PP.assets.image.load_color(s, "0xF0D978", 120, 120);   
+    img_terreno = PP.assets.image.load(s, "./assets/images/testterrano.png");   
     img_verde = PP.assets.image.load_color(s, "0x76B08A", 120, 120);  
     img_piattaforma = PP.assets.image.load_color(s, "0xE36BD6", 120, 40);
     img_piattaforma_tempo = PP.assets.image.load_color(s, "0x9C60F6", 40, 40);
