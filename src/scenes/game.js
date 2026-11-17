@@ -26,7 +26,7 @@ const VEL_SALTO = 1000;
 // Impostazioni dei tasti 键盘按键设置//
 const TASTO_SX = PP.key_codes.LEFT;
 const TASTO_DX = PP.key_codes.RIGHT;
-const TASTO_SALTO = PP.key_codes.SPACE;
+const TASTO_SALTO = PP.key_codes.UP;
 const TASTO_E = PP.key_codes.E; // Aggiunto per il tasto E
 
 // Barra dell'acqua 水量条 //
@@ -68,7 +68,7 @@ function preload(s) {
     img_verde = PP.assets.image.load_color(s, "0x76B08A", 120, 120);  
     img_piattaforma = PP.assets.image.load_color(s, "0xE36BD6", 120, 40);
     img_piattaforma_tempo = PP.assets.image.load_color(s, "0x9C60F6", 40, 40);
-    img_villager = PP.assets.image.load_color(s, "0xFF8C00", 120, 120);
+    img_villager = PP.assets.image.load(s, "./assets/images/villager_120X120.png");  
     img_tubo = PP.assets.image.load_color(s, "0x8EAB4E", 120, 120);
     img_edificio = PP.assets.image.load_color(s, "0x968C8C", 120, 120);
     img_acqua_tossica = PP.assets.image.load_color(s, "0x1E3529", 120, 120);  // Acqua avvelenata nera黑色的毒水
