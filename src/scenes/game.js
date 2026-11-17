@@ -58,9 +58,11 @@ let img_acqua_tossica;
 let img_ossa;
 let img_casa;
 let img_oasi;
+// Elenco di tutte le pozze d'acqua verde (bevibili) 所有能喝的绿水都放在这个清单里 //
+let pozze = [];
 let offset_camera_y = 180;
-const X_INIZIO_SOTTERRANEO = 81 * QUADRATO;    // 地下开始（左边的墙）
-const X_FINE_SOTTERRANEO   = 122 * QUADRATO;   // 地下结束（右边的墙）
+const X_INIZIO_SOTTERRANEO = 81 * QUADRATO;    // Inizio del sottosuolo (parete a sinistra)地下开始（左边的墙）
+const X_FINE_SOTTERRANEO   = 122 * QUADRATO;   // Fine del livello sotterraneo (parete a destra)地下结束（右边的墙）
 
 // Caricamento delle risorse del gioco 加载游戏资源 //
 function preload(s) {
@@ -104,8 +106,8 @@ function crea_blocco(s, immagine, colonna, riga, larghezza, altezza) {
         immagine,
         colonna * QUADRATO,     // x：左上角
         riga * QUADRATO,        // y：左上角
-        larghezza * QUADRATO,   // 宽
-        altezza * QUADRATO,     // 高
+        larghezza * QUADRATO,   // largezza宽
+        altezza * QUADRATO,     // altezza高
         0, 0                    // pivot 0,0 = x、y 指的是左上角
     );
     // 2. Aggiungi fisica (immobile)加物理（不会动的）
@@ -172,7 +174,7 @@ function crea_ossa(s, colonna, riga, larghezza) {
         colonna * QUADRATINO,
         riga * QUADRATINO,
         larghezza * QUADRATINO,
-        2 * QUADRATINO,           // 高：骨头固定 2 小格
+        2 * QUADRATINO,           // Alto: ossa fisse, 2 caselle高：骨头固定 2 小格
         0, 0
     );
     PP.physics.add(s, ossa, PP.physics.type.STATIC);
@@ -191,28 +193,50 @@ function crea_casa(s, colonna, riga, larghezza, altezza) {
     );
 }
 
+// Crea una pozza d'acqua verde (in quadrati grandi) e la aggiunge all'elenco 创建一块绿水（用大格子算），并放进清单 //
+function crea_acqua(s, colonna, riga, larghezza, altezza) {
+    let pozza = PP.assets.tilesprite.add(
+        s,
+        img_verde,
+        colonna * QUADRATO,       // x: angolo in alto a sinistra 左上角
+        riga * QUADRATO,          // y: angolo in alto a sinistra 左上角
+        larghezza * QUADRATO,     // larghezza 宽
+        altezza * QUADRATO,       // altezza 高
+        0, 0
+    );
+    // Aggiungi fisica (immobile) 加物理（不会动的） //
+    PP.physics.add(s, pozza, PP.physics.type.STATIC);
+    // Il personaggio può starci sopra 让角色能站在上面 //
+    PP.physics.add_collider(s, personaggio, pozza);
+    // Aggiungi la pozza all'elenco, così il codice per bere può trovarla 把这块水放进清单，喝水的代码才能找到它 //
+    pozze.push(pozza);
+}
+
+// Piccola pozza d'acqua verde sopra una piattaforma (in quadratini) 平台上的一小片绿水（用小格子算） //
 function crea_acqua_piccola(s, colonna, riga, larghezza) {
-    PP.assets.tilesprite.add(
+    let pozza = PP.assets.tilesprite.add(
         s,
         img_verde,
         colonna * QUADRATINO,     // x：左上角
         riga * QUADRATINO,        // y：左上角
-        larghezza * QUADRATINO,   // 宽
-        26,                       // 高：和 Figma 一样，26px
+        larghezza * QUADRATINO,   // largezza宽
+        26,                       // altezza高：和 Figma 一样，26px
         0, 0
     );
+    // Aggiungi anche questa pozza all'elenco 这片水也放进清单 //
+    pozze.push(pozza);
 }
 
 function crea_mappa(s) {
-    //          场景  图片           列   行  宽  高Colonna   Riga   Larghezza   Altezza
+    //          场景  图片           列   行  宽  高（Colonna   Riga   Larghezza   Altezza）
     crea_blocco(s, img_terreno,     0,  5,  8,  1);   // Piano terra 1地面1
-    crea_blocco(s, img_verde,       8,  5,  2,  1);   // Blocco verde绿色块
+    crea_acqua(s,                   8,  5,  2,  1);   // Pozza d'acqua verde 绿色的水
     crea_blocco(s, img_terreno,    10,  5, 12,  1);   // Piano 2地面2
     crea_blocco(s, img_terreno,    13,  4,  6,  1);   // Livello inferiore della scalinata台阶下层
     crea_blocco(s, img_terreno,    15,  3,  3,  1);   // Piano superiore della scalinata台阶上层
-    crea_blocco(s, img_verde,      22,  5, 16,  1);
+    crea_acqua(s,                  22,  5, 16,  1);   // Pozza d'acqua verde 绿色的水
     crea_blocco(s, img_terreno,    38,  5, 4,  1);
-    crea_blocco(s, img_verde,      42,  5, 4,  1);
+    crea_acqua(s,                  42,  5,  4,  1);   // Pozza d'acqua verde 绿色的水
     crea_blocco(s, img_terreno,    46,  5, 35,  1);
     crea_blocco(s, img_terreno,  81,  6,  1,  3);   // wall墙
     crea_blocco(s, img_terreno,  82,  8,  1,  1);   // scala台阶
@@ -256,7 +280,7 @@ function crea_mappa(s) {
     crea_tubo(s,                   122,  4,  9,  1);      // Il tubo sulla destra右边的管子
     crea_blocco(s, img_terreno,    122,  5, 12,  1);      // Il terreno sotto il tubo管子下面的地面
     crea_piattaforma_fissa(s, 381, 11, 12);               // La piattaforma rosa sul tubo (piccoli quadratini)管子上的粉色平台（小格子）
-    crea_blocco(s, img_verde,      134,  5,  3,  1);      // Acqua verde绿色的水
+    crea_acqua(s,                  134,  5,  3,  1);      // Pozza d'acqua verde 绿色的水
     crea_blocco(s, img_terreno,    137,  5, 24,  1);      // a terra地面
 
     // ========== Oasi（毒水和骨头）==========
