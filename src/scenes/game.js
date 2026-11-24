@@ -1,37 +1,45 @@
 const COLORE_PERSONAGGIO = "0xE44A4A";
 
 const QUADRATO = 120;
-const QUADRATINO = 40;   // Una piccola casella verde一个青色小格子 = 40px
-const L_LIVELLO = 232 * QUADRATO;   // = 27840
-const A_LIVELLO = 12 * QUADRATO;   // Altezza del livello关卡高度 = 1440
-const SPAZIO_SOPRA = 600;   // Lo spazio in più lasciato nella parte superiore dell'immagine世界在画面上方多留的空间
+const QUADRATINO = 40;   
+const L_LIVELLO = 232 * QUADRATO;   
+const A_LIVELLO = 12 * QUADRATO;   
+const SPAZIO_SOPRA = 600;   
 
 const Y_TERRENO = 600;
-// Lunghezza del livello关卡长度//
-// Prospettiva anticipata提前、预留视野 //
 const ANTICIPO_CAMERA = 200;
 
 const X_PERSONAGGIO = 180;
 const L_PERSONAGGIO = 120;
 const A_PERSONAGGIO = 120;
-// Velocità di movimento del personaggio 角色移动速度//
 const VEL_CORSA = 300;
-// attrito del personaggio 角色摩擦力//
 const ATTRITO = 1200;
-// Numero massimo di salti del personaggio 角色最大跳跃次数//
+
+// Doppio salto
 const SALTI_MAX = 2;
-// Velocità di salto del personaggio 角色跳跃速度//
+let salti = 0;
 const VEL_SALTO = 1000;
 
-// Impostazioni dei tasti 键盘按键设置//
+// Vite e barra vita a quadratini
+const VITE_MAX = 5;
+let vite = VITE_MAX;
+let cuori_vita = []; 
+const L_QUADRATINO_VITA = 16; 
+const A_QUADRATINO_VITA = 16; 
+const Y_BARRA_VITA = 75;      
+const COLORE_VITA_ACCESO = "0xFF0000"; 
+const X_INIZIO_BARRA_VITA = 20;
+
+let tempo_ultimo_danno = 0;
+
+// Tasti
 const TASTO_SX = PP.key_codes.LEFT;
 const TASTO_DX = PP.key_codes.RIGHT;
 const TASTO_SALTO = PP.key_codes.UP;
-const TASTO_E = PP.key_codes.E; // Aggiunto per il tasto E
+const TASTO_E = PP.key_codes.E; 
 
-// Barra dell'acqua 水量条 //
+// Barra dell'acqua
 const ACQUA_MAX = 100;
-// Larghezza quando la striscia d'acqua è piena 水量条满时的宽度 //
 const L_BARRA_ACQUA = 200;
 const A_BARRA_ACQUA = 20;
 const X_BARRA_ACQUA = 120;
@@ -42,29 +50,16 @@ const X_INIZIO_BARRA_ACQUA = 20;
 let acqua = ACQUA_MAX;
 let barra_acqua;
 
-let salti = 0;
 let personaggio;
-
-let vicino_bottiglia = false;
-let testo_bere;
-let img_terreno;
-let img_verde;
-let img_piattaforma;
-let img_piattaforma_tempo;
-let img_villager;
-let img_tubo;
-let img_edificio
-let img_acqua_tossica;
-let img_ossa;
-let img_casa;
-let img_oasi;
-// Elenco di tutte le pozze d'acqua verde (bevibili) 所有能喝的绿水都放在这个清单里 //
 let pozze = [];
 let offset_camera_y = 180;
-const X_INIZIO_SOTTERRANEO = 81 * QUADRATO;    // Inizio del sottosuolo (parete a sinistra)地下开始（左边的墙）
-const X_FINE_SOTTERRANEO   = 122 * QUADRATO;   // Fine del livello sotterraneo (parete a destra)地下结束（右边的墙）
 
-// Caricamento delle risorse del gioco 加载游戏资源 //
+let img_tasto_e;
+let tasto_e_sprite; 
+
+const X_INIZIO_SOTTERRANEO = 81 * QUADRATO;    
+const X_FINE_SOTTERRANEO   = 122 * QUADRATO;   
+
 function preload(s) {
     img_terreno = PP.assets.image.load(s, "./assets/images/testterrano.png");   
     img_verde = PP.assets.image.load_color(s, "0x76B08A", 120, 120);  
@@ -73,24 +68,27 @@ function preload(s) {
     img_villager = PP.assets.image.load(s, "./assets/images/villager_120X120.png");  
     img_tubo = PP.assets.image.load_color(s, "0x8EAB4E", 120, 120);
     img_edificio = PP.assets.image.load_color(s, "0x968C8C", 120, 120);
-    img_acqua_tossica = PP.assets.image.load_color(s, "0x1E3529", 120, 120);  // Acqua avvelenata nera黑色的毒水
-    img_ossa = PP.assets.image.load_color(s, "0xF2DFB0", 40, 40);  // ossa会沉的骨头
-    img_casa = PP.assets.image.load_color(s, "0xE36BD6", 120, 120);  // Il secondo abitante del villaggio第二个村庄的建筑（粉色）
-    img_oasi = PP.assets.image.load_color(s, "0xA3EAE2", 120, 120);  // oasi最后的绿洲水（浅蓝绿）
+    img_acqua_tossica = PP.assets.image.load_color(s, "0x1E3529", 120, 120);  
+    img_ossa = PP.assets.image.load_color(s, "0xF2DFB0", 40, 40);  
+    img_casa = PP.assets.image.load_color(s, "0xE36BD6", 120, 120);  
+    img_oasi = PP.assets.image.load_color(s, "0xA3EAE2", 120, 120);  
+    img_tasto_e = PP.assets.image.load(s, "./assets/images/tasto_e.png");
 }
 
-// Crea oggetto创建物品 //
 function create(s) {
-    crea_villager(s, 64, 4);   // Disegna prima gli abitanti del villaggio → nel livello inferiore① 先画村民 → 在下层
-    // L'edificio del secondo villaggio (da creare prima del personaggio, in modo che il personaggio ci passi davanti) 第二个村庄的建筑（也要在角色之前创建，这样角色从它前面走过）
-    crea_casa(s, 140, 3, 1, 2);   // Quella più bassa矮的那一块
-    crea_casa(s, 141, 2, 4, 3);   // la parte più alta高的那一块
+    crea_villager(s, 64, 4);   
+    crea_casa(s, 140, 3, 1, 2);   
+    crea_casa(s, 141, 2, 4, 3);   
     crea_personaggio(s);
     crea_mappa(s);
     crea_camera(s);
     crea_barra_acqua(s);
+    crea_barra_vita(s); 
 
-    // Scenario,Intervallo di tempo（1000ms = 1s）,Funzione da eseguire, Ripetere o meno // 场景、时间间隔、要执行的函数、是否重复 //
+    // Creazione pulita dello sprite nascosto fuori dallo schermo
+    tasto_e_sprite = PP.assets.image.add(s, img_tasto_e, -500, -500, 0.5, 0.5);
+    tasto_e_sprite.geometry.visible = false;
+
     PP.timers.add_timer(
         s,
         5000,
@@ -100,19 +98,16 @@ function create(s) {
 }
 
 function crea_blocco(s, immagine, colonna, riga, larghezza, altezza) {
-    // 1. Mappatura: convertire il numero di caselle in pixel (numero di caselle × 120)铺图：把格子数换算成像素（格子数 × 120）
     let blocco = PP.assets.tilesprite.add(
         s,
         immagine,
-        colonna * QUADRATO,     // x：左上角
-        riga * QUADRATO,        // y：左上角
-        larghezza * QUADRATO,   // largezza宽
-        altezza * QUADRATO,     // altezza高
-        0, 0                    // pivot 0,0 = x、y 指的是左上角
+        colonna * QUADRATO,    
+        riga * QUADRATO,        
+        larghezza * QUADRATO,   
+        altezza * QUADRATO,    
+        0, 0                    
     );
-    // 2. Aggiungi fisica (immobile)加物理（不会动的）
     PP.physics.add(s, blocco, PP.physics.type.STATIC);
-    // 3. Permettere al personaggio di salirci sopra / di urtarlo让角色能站上去 / 撞到它
     PP.physics.add_collider(s, personaggio, blocco);
 }
 
@@ -120,10 +115,10 @@ function crea_piattaforma_fissa(s, colonna, riga, larghezza) {
     let piattaforma = PP.assets.tilesprite.add(
         s,
         img_piattaforma,
-        colonna * QUADRATINO,     // x：angolo in alto a sinistra左上角
-        riga * QUADRATINO,        // y：angolo in alto a sinistra左上角
-        larghezza * QUADRATINO,   // largo宽
-        QUADRATINO,               // altezza高：Fissare la piattaforma di 1 tacca平台固定 1 小格
+        colonna * QUADRATINO,    
+        riga * QUADRATINO,        
+        larghezza * QUADRATINO,   
+        QUADRATINO,               
         0, 0
     );
     PP.physics.add(s, piattaforma, PP.physics.type.STATIC);
@@ -145,106 +140,68 @@ function crea_piattaforma_a_tempo(s, colonna, riga, larghezza) {
 }
 
 function crea_villager(s, colonna, riga) {
-    PP.assets.image.add(
-        s,
-        img_villager,
-        colonna * QUADRATO,
-        riga * QUADRATO,
-        0, 0
-    );
+    PP.assets.image.add(s, img_villager, colonna * QUADRATO, riga * QUADRATO, 0, 0);
 }
 
 function crea_tubo(s, colonna, riga, larghezza, altezza) {
-    PP.assets.tilesprite.add(
-        s,
-        img_tubo,
-        colonna * QUADRATO,
-        riga * QUADRATO,
-        larghezza * QUADRATO,   
-        altezza * QUADRATO, 
-        0, 0
-    );
+    PP.assets.tilesprite.add(s, img_tubo, colonna * QUADRATO, riga * QUADRATO, larghezza * QUADRATO, altezza * QUADRATO, 0, 0);
 }
 
-// Ossa che affondano nell'acqua avvelenata (per ora consideriamola una piattaforma normale, alta 2 caselle piccole; calcoliamo in base alle caselle piccole)毒水里会沉下去的骨头（现在先当普通平台，高 2 小格，用小格子算）
 function crea_ossa(s, colonna, riga, larghezza) {
-    let ossa = PP.assets.tilesprite.add(
-        s,
-        img_ossa,
-        colonna * QUADRATINO,
-        riga * QUADRATINO,
-        larghezza * QUADRATINO,
-        2 * QUADRATINO,           // Alto: ossa fisse, 2 caselle高：骨头固定 2 小格
-        0, 0
-    );
+    let ossa = PP.assets.tilesprite.add(s, img_ossa, colonna * QUADRATINO, riga * QUADRATINO, larghezza * QUADRATINO, 2 * QUADRATINO, 0, 0);
     PP.physics.add(s, ossa, PP.physics.type.STATIC);
     PP.physics.add_collider(s, personaggio, ossa);
 }
 
 function crea_casa(s, colonna, riga, larghezza, altezza) {
-    PP.assets.tilesprite.add(
-        s,
-        img_casa,
-        colonna * QUADRATO,       
-        riga * QUADRATO,          
-        larghezza * QUADRATO,     
-        altezza * QUADRATO,       
-        0, 0
-    );
+    PP.assets.tilesprite.add(s, img_casa, colonna * QUADRATO, riga * QUADRATO, larghezza * QUADRATO, altezza * QUADRATO, 0, 0);
 }
 
-// Crea una pozza d'acqua verde (in quadrati grandi) e la aggiunge all'elenco 创建一块绿水（用大格子算），并放进清单 //
 function crea_acqua(s, colonna, riga, larghezza, altezza) {
     let pozza = PP.assets.tilesprite.add(
         s,
         img_verde,
-        colonna * QUADRATO,       // x: angolo in alto a sinistra 左上角
-        riga * QUADRATO,          // y: angolo in alto a sinistra 左上角
-        larghezza * QUADRATO,     // larghezza 宽
-        altezza * QUADRATO,       // altezza 高
+        colonna * QUADRATO,       
+        riga * QUADRATO,          
+        larghezza * QUADRATO,    
+        altezza * QUADRATO,      
         0, 0
     );
-    // Aggiungi fisica (immobile) 加物理（不会动的） //
     PP.physics.add(s, pozza, PP.physics.type.STATIC);
-    // Il personaggio può starci sopra 让角色能站在上面 //
     PP.physics.add_collider(s, personaggio, pozza);
-    // Aggiungi la pozza all'elenco, così il codice per bere può trovarla 把这块水放进清单，喝水的代码才能找到它 //
     pozze.push(pozza);
 }
 
-// Piccola pozza d'acqua verde sopra una piattaforma (in quadratini) 平台上的一小片绿水（用小格子算） //
 function crea_acqua_piccola(s, colonna, riga, larghezza) {
     let pozza = PP.assets.tilesprite.add(
         s,
         img_verde,
-        colonna * QUADRATINO,     // x：左上角
-        riga * QUADRATINO,        // y：左上角
-        larghezza * QUADRATINO,   // largezza宽
-        26,                       // altezza高：和 Figma 一样，26px
+        colonna * QUADRATINO,    
+        riga * QUADRATINO,        
+        larghezza * QUADRATINO,   
+        26,                        
         0, 0
     );
-    // Aggiungi anche questa pozza all'elenco 这片水也放进清单 //
     pozze.push(pozza);
 }
 
 function crea_mappa(s) {
-    //          场景  图片           列   行  宽  高（Colonna   Riga   Larghezza   Altezza）
-    crea_blocco(s, img_terreno,     0,  5,  8,  1);   // Piano terra 1地面1
-    crea_acqua(s,                   8,  5,  2,  1);   // Pozza d'acqua verde 绿色的水
-    crea_blocco(s, img_terreno,    10,  5, 12,  1);   // Piano 2地面2
-    crea_blocco(s, img_terreno,    13,  4,  6,  1);   // Livello inferiore della scalinata台阶下层
-    crea_blocco(s, img_terreno,    15,  3,  3,  1);   // Piano superiore della scalinata台阶上层
-    crea_acqua(s,                  22,  5, 16,  1);   // Pozza d'acqua verde 绿色的水
-    crea_blocco(s, img_terreno,    38,  5, 4,  1);
-    crea_acqua(s,                  42,  5,  4,  1);   // Pozza d'acqua verde 绿色的水
-    crea_blocco(s, img_terreno,    46,  5, 35,  1);
-    crea_blocco(s, img_terreno,  81,  6,  1,  3);   // wall墙
-    crea_blocco(s, img_terreno,  82,  8,  1,  1);   // scala台阶
+    crea_blocco(s, img_terreno,    0,  5,  8,  1);   
+    crea_acqua(s,                  8,  5,  2,  1);   
+    crea_blocco(s, img_terreno,   10,  5, 12,  1);   
+    crea_blocco(s, img_terreno,   13,  4,  6,  1);   
+    crea_blocco(s, img_terreno,   15,  3,  3,  1);   
+    crea_acqua(s,                 22,  5, 16,  1);   
+    crea_blocco(s, img_terreno,   38,  5, 4,  1);
+    crea_acqua(s,                 42,  5,  4,  1);   
+    crea_blocco(s, img_terreno,   46,  5, 35,  1);
+    crea_blocco(s, img_terreno,  81,  6,  1,  3);   
+    crea_blocco(s, img_terreno,  82,  8,  1,  1);   
     crea_blocco(s, img_terreno,  82,  9,  4,  1);  
-    crea_blocco(s, img_terreno,  85, 10,  1,  2);   // colonna往下的柱子
-    // ——A destra (e a sinistra, in simmetria speculare) 右边（和左边左右对称）——
-    crea_blocco(s, img_terreno, 121,  6,  1,  3);   // wall墙
-    crea_blocco(s, img_terreno, 120,  8,  1,  1);   // scala台阶
+    crea_blocco(s, img_terreno,  85, 10,  1,  2);   
+
+    crea_blocco(s, img_terreno, 121,  6,  1,  3);   
+    crea_blocco(s, img_terreno, 120,  8,  1,  1);   
     crea_blocco(s, img_terreno, 117,  9,  4,  1);   
     crea_blocco(s, img_terreno, 117, 10,  1,  2);
 
@@ -258,13 +215,12 @@ function crea_mappa(s) {
     crea_piattaforma_fissa(s, 216, 11, 12);
     crea_piattaforma_fissa(s, 261, 24,  4);
     crea_piattaforma_fissa(s, 276, 26,  6);
-    crea_piattaforma_fissa(s, 297, 29, 12);   // Quello al centro con l'acqua sopra中间那个上面有水的
+    crea_piattaforma_fissa(s, 297, 29, 12);   
     crea_piattaforma_fissa(s, 321, 22,  6);
     crea_piattaforma_fissa(s, 341, 23,  4);
 
-    crea_acqua_piccola(s, 298, 29, 10);   // Acqua verde sulla piattaforma rosa sotterranea地下粉色平台上的绿水
+    crea_acqua_piccola(s, 298, 29, 10);   
 
-    // —— 紫色平台Piattaforma Viola ——
     crea_piattaforma_a_tempo(s, 129, 11, 3);
     crea_piattaforma_a_tempo(s, 268, 21, 5);
     crea_piattaforma_a_tempo(s, 288, 23, 4);
@@ -275,55 +231,58 @@ function crea_mappa(s) {
 
     crea_blocco(s, img_edificio, 76, 0, 51, 4);
 
-    // ========== Una volta usciti dal sottosuolo (uscita a destra)从地下出来以后（右边的出口）==========
-    //          场景  图片            列   行  宽  高
-    crea_tubo(s,                   122,  4,  9,  1);      // Il tubo sulla destra右边的管子
-    crea_blocco(s, img_terreno,    122,  5, 12,  1);      // Il terreno sotto il tubo管子下面的地面
-    crea_piattaforma_fissa(s, 381, 11, 12);               // La piattaforma rosa sul tubo (piccoli quadratini)管子上的粉色平台（小格子）
-    crea_acqua(s,                  134,  5,  3,  1);      // Pozza d'acqua verde 绿色的水
-    crea_blocco(s, img_terreno,    137,  5, 24,  1);      // a terra地面
+    crea_tubo(s,                   122,  4,  9,  1);      
+    crea_blocco(s, img_terreno,    122,  5, 12,  1);      
+    crea_piattaforma_fissa(s, 381, 11, 12);               
+    crea_acqua(s,                  134,  5,  3,  1);      
+    crea_blocco(s, img_terreno,    137,  5, 24,  1);      
 
-    // ========== Oasi（毒水和骨头）==========
-    crea_blocco(s, img_terreno,    156,  4,  5,  1);      // Davanti a “Acqua avvelenata”: piano inferiore毒水前面：下层
-    crea_blocco(s, img_terreno,    158,  3,  5,  1);      // Davanti a “Acqua avvelenata”: piano superiore毒水前面：上层
-    crea_blocco(s, img_acqua_tossica, 161, 5, 30,  1);    // Acqua avvelenata nera黑色的毒水
+    crea_blocco(s, img_terreno,    156,  4,  5,  1);      
+    crea_blocco(s, img_terreno,    158,  3,  5,  1);      
+    crea_blocco(s, img_acqua_tossica, 161, 5, 30,  1);    
 
-    // Ossa che affondano (piccoli quadratini)会沉的骨头（小格子）  
-    crea_ossa(s,            495, 14, 15);
-    crea_ossa(s,            520, 14,  6);
-    crea_ossa(s,            532, 14,  3);
-    crea_ossa(s,            546, 14,  3);
-    crea_ossa(s,            554, 14,  1);
-    crea_ossa(s,            564, 14,  7);
+    crea_ossa(s,              495, 14, 15);
+    crea_ossa(s,              520, 14,  6);
+    crea_ossa(s,              532, 14,  3);
+    crea_ossa(s,              546, 14,  3);
+    crea_ossa(s,              554, 14,  1);
+    crea_ossa(s,              564, 14,  7);
 
-    // Dietro l'acqua avvelenata毒水后面
-    crea_blocco(s, img_terreno,    190,  3,  5,  1);      // 上层Piano superiore
-    crea_acqua_piccola(s, 572,  9, 11);   // L'acqua verde sui gradini vicino all'oasi接近绿洲那块台阶上的绿水
-    crea_blocco(s, img_terreno,    192,  4,  5,  1);      // 下层livello inferiore
-    crea_blocco(s, img_terreno,    191,  5, 31,  1);      // 地面a terra
-    crea_blocco(s, img_oasi,       222,  5,  8,  1);      // 最后的绿洲水（oasi）
-    crea_blocco(s, img_terreno,    230,  5,  2,  1);      // 关卡最后一小段地面L'ultimo breve tratto di terreno del livello
-    
+    crea_blocco(s, img_terreno,    190,  3,  5,  1);      
+    crea_acqua_piccola(s, 572,  9, 11);   
+    crea_blocco(s, img_terreno,    192,  4,  5,  1);      
+    crea_blocco(s, img_terreno,    191,  5, 31,  1);      
+    crea_blocco(s, img_oasi,       222,  5,  8,  1);      
+    crea_blocco(s, img_terreno,    230,  5,  2,  1);      
 }
 
-
-// aqua水 //
 function crea_barra_acqua(s) {
-    barra_acqua = PP.shapes.rectangle_add(
-        s,
-        X_BARRA_ACQUA,
-        Y_BARRA_ACQUA,
-        L_BARRA_ACQUA,
-        A_BARRA_ACQUA,
-        COLORE_ACQUA,
-        1
-    );
-    // Imposta la barra dell'acqua per rimanere fissa sullo schermo 设置水量条固定在屏幕上 //
+    barra_acqua = PP.shapes.rectangle_add(s, X_BARRA_ACQUA, Y_BARRA_ACQUA, L_BARRA_ACQUA, A_BARRA_ACQUA, COLORE_ACQUA, 1);
     barra_acqua.tile_geometry.scroll_factor_x = 0;
     barra_acqua.tile_geometry.scroll_factor_y = 0;
 }
 
-// Consuma acqua消耗水量 //
+function crea_barra_vita(s) {
+    cuori_vita = [];
+    for (let i = 0; i < VITE_MAX; i++) {
+        let x_quadratino = X_INIZIO_BARRA_VITA + (i * (L_QUADRATINO_VITA + 6)); 
+        let quadratino = PP.shapes.rectangle_add(s, x_quadratino, Y_BARRA_VITA, L_QUADRATINO_VITA, A_QUADRATINO_VITA, COLORE_VITA_ACCESO, 1);
+        quadratino.tile_geometry.scroll_factor_x = 0;
+        quadratino.tile_geometry.scroll_factor_y = 0;
+        cuori_vita.push(quadratino);
+    }
+}
+
+function aggiorna_barra_vita() {
+    for (let i = 0; i < cuori_vita.length; i++) {
+        if (i < vite) {
+            cuori_vita[i].geometry.visible = true;  
+        } else {
+            cuori_vita[i].geometry.visible = false; 
+        }
+    }
+}
+
 function consuma_acqua(s) {
     if (acqua > 0) {
         acqua -= 1;
@@ -331,46 +290,17 @@ function consuma_acqua(s) {
     aggiorna_barra_acqua();
 }
 
-// Aggiorna la barra dell'acqua 更新水量条 //
 function aggiorna_barra_acqua() {
-    // Calcola la percentuale di acqua rimanente 计算剩余水量的比例 //
     let scala = acqua / ACQUA_MAX;
     barra_acqua.geometry.scale_x = scala;
-    // Sposta il centro della barra verso sinistra mentre si accorcia //
-    // 水量条变短时让中心点向左移动 //
-    barra_acqua.geometry.x =
-    // Mantiene fisso il lato sinistro 保持左边固定 //
-        X_INIZIO_BARRA_ACQUA + (L_BARRA_ACQUA * scala) / 2;
+    barra_acqua.geometry.x = X_INIZIO_BARRA_ACQUA + (L_BARRA_ACQUA * scala) / 2;
 }
 
-
 function crea_personaggio(s) {
-    // Crea rettangolo del personaggio 创建角色矩形 //
-    personaggio = PP.shapes.rectangle_add(
-        s,
-        X_PERSONAGGIO,
-        Y_TERRENO - A_PERSONAGGIO / 2,
-        L_PERSONAGGIO,
-        A_PERSONAGGIO,
-        COLORE_PERSONAGGIO,
-        1
-    );
-    // Aggiungi fisica al personaggio 给角色添加物理属性 //
-    PP.physics.add(
-        s,
-        personaggio,
-        PP.physics.type.DYNAMIC
-    );
-    // Imposta il personaggio per rimanere all'interno dei limiti del mondo 设置角色在世界边界内移动 //
-    PP.physics.set_collide_world_bounds(
-        personaggio,
-        true
-    );
-    // Imposta l'attrito del personaggio 设置角色摩擦力 //
-    PP.physics.set_drag_x(
-        personaggio, 
-        ATTRITO
-    );
+    personaggio = PP.shapes.rectangle_add(s, X_PERSONAGGIO, Y_TERRENO - A_PERSONAGGIO / 2, L_PERSONAGGIO, A_PERSONAGGIO, COLORE_PERSONAGGIO, 1);
+    PP.physics.add(s, personaggio, PP.physics.type.DYNAMIC);
+    PP.physics.set_collide_world_bounds(personaggio, true);
+    PP.physics.set_drag_x(personaggio, ATTRITO);
 }
 
 function salta(s) {
@@ -382,47 +312,96 @@ function salta(s) {
         PP.interactive.kb.is_key_just_down(s, TASTO_SALTO)
         && salti < SALTI_MAX
     ) {
-        PP.physics.set_velocity_y(
-            personaggio,
-            -VEL_SALTO
-        );
+        PP.physics.set_velocity_y(personaggio, -VEL_SALTO);
         salti += 1;
     }
-
 }
 
 function cammina(s) {
     if (PP.interactive.kb.is_key_down(s, TASTO_SX)) {
-        PP.physics.set_velocity_x(
-            personaggio,
-            -VEL_CORSA
-        );
+        PP.physics.set_velocity_x(personaggio, -VEL_CORSA);
     } else if (PP.interactive.kb.is_key_down(s, TASTO_DX)) {
-        PP.physics.set_velocity_x(
-            personaggio,
-            VEL_CORSA
-        );
+        PP.physics.set_velocity_x(personaggio, VEL_CORSA);
     } 
 }
 
-// Crea la camera 创建摄像机 //
+function gestisci_pozze(s) {
+    let vicino_a_una_pozza = false;
+    let tempo_corrente = s.time ? s.time.now : Date.now();
+
+    for (let i = 0; i < pozze.length; i++) {
+        let pozza = pozze[i];
+        
+        let pozza_x = pozza.geometry.x;
+        let pozza_y = pozza.geometry.y;
+        let pozza_l = pozza.geometry.width;
+        let pozza_a = pozza.geometry.height;
+
+        let pers_x = personaggio.geometry.x;
+        let pers_y = personaggio.geometry.y;
+
+        let distanza_x = Math.abs(pers_x - pozza_x);
+        let distanza_y = Math.abs(pers_y - pozza_y);
+
+        // Controllo vicinanza e se l'acqua non è al massimo
+        if (distanza_x < 90 && distanza_y < 90) {
+            if (acqua < ACQUA_MAX) {
+                vicino_a_una_pozza = true;
+                
+                tasto_e_sprite.geometry.x = pozza_x;
+                tasto_e_sprite.geometry.y = pozza_y - 40;
+                tasto_e_sprite.geometry.visible = true;
+            }
+
+            // Se il giocatore preme "E", ricarica l'acqua e nasconde subito il tasto
+            if (PP.interactive.kb.is_key_just_down(s, TASTO_E) && acqua < ACQUA_MAX) {
+                acqua = ACQUA_MAX;
+                aggiorna_barra_acqua();
+                tasto_e_sprite.geometry.visible = false;
+            }
+        }
+
+        // Controllo sprofondamento e danno
+        let pers_sinistra = pers_x - (L_PERSONAGGIO / 2);
+        let pers_destra = pers_x + (L_PERSONAGGIO / 2);
+        let pers_fondo = pers_y + (A_PERSONAGGIO / 2);
+
+        let dentro_x = pers_destra >= pozza_x && pers_sinistra <= (pozza_x + pozza_l);
+        let dentro_y = pers_fondo >= pozza_y && pers_y <= (pozza_y + pozza_a + 20);
+
+        if (dentro_x && dentro_y) {
+            PP.physics.set_velocity_y(personaggio, 40);
+
+            if (vite > 0 && (tempo_corrente - tempo_ultimo_danno > 1500)) {
+                vite -= 1;
+                tempo_ultimo_danno = tempo_corrente;
+                aggiorna_barra_vita(); 
+                console.log("Sei sprofondato nella pozza tossica! Vite rimaste: " + vite);
+            }
+        }
+    }
+
+    // Se non siamo vicini a nessuna pozza o l'acqua è piena, nasconde il tasto E
+    if (!vicino_a_una_pozza) {
+        tasto_e_sprite.geometry.visible = false;
+    }
+}
+
 function crea_camera(s) {
     PP.physics.set_world_bounds(s, 0, -SPAZIO_SOPRA, L_LIVELLO, A_LIVELLO + SPAZIO_SOPRA);
     PP.camera.set_bounds(s, 0, 0, L_LIVELLO, A_LIVELLO);
-    // Imposta la camera per seguire il personaggio 设置摄像机跟随角色 //
     PP.camera.start_follow(s, personaggio, -ANTICIPO_CAMERA, 180);
 }
+
 function aggiorna_camera(s) {
     let x = personaggio.geometry.x;
     let obiettivo;
 
-    // 角色的 x 在地下的左右范围之内 → 在地下
     if (x > X_INIZIO_SOTTERRANEO && x < X_FINE_SOTTERRANEO) {
-        obiettivo = 0;      // 地下（原来 -120，太低了）
+        obiettivo = 0;      
     } else {
-        obiettivo = 180;    // 地上
+        obiettivo = 180;    
     }
-    // Avvicinati lentamente all’obiettivo, non saltarci sopra tutto d’un colpo
     offset_camera_y = offset_camera_y + (obiettivo - offset_camera_y) * 0.08;
     PP.camera.set_follow_offset(s, -ANTICIPO_CAMERA, offset_camera_y);
 }
@@ -431,6 +410,7 @@ function update(s) {
     cammina(s);
     salta(s);
     aggiorna_camera(s); 
+    gestisci_pozze(s);
 }
 
 function destroy(s) {}
