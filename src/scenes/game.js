@@ -95,7 +95,7 @@ function create(s) {
 
     PP.timers.add_timer(
         s,
-        3000,
+        2000,
         consuma_acqua,
         true
     );
