@@ -12,6 +12,23 @@ const ANTICIPO_CAMERA = 200;
 const X_PERSONAGGIO = 180;
 const L_PERSONAGGIO = 120;
 const A_PERSONAGGIO = 120;
+
+// Accovacciarsi 蹲下 //
+const A_ACCOVACCIATO = 60;      // altezza quando è accovacciato 蹲下时的高度 //
+const VEL_ACCOVACCIATO = 150;   // velocità quando è accovacciato (più lento) 蹲着走的速度（更慢） //
+let accovacciato = false;       // adesso è accovacciato? 现在是不是蹲着 //
+let a_attuale = A_PERSONAGGIO;  // altezza attuale del personaggio 角色现在的高度 //
+
+// Tubo 管子 //
+const A_PASSAGGIO = 2 * QUADRATINO;   // altezza del passaggio dentro il tubo (80) 管子里通道的高度（80） //
+let tubi = [];
+
+// Piattaforme a tempo 限时平台 //
+const TEMPO_PRIMA_DI_LAMPEGGIARE = 2000;   // 2 secondi dopo che ci sali sopra inizia a lampeggiare 站上去 2 秒后开始闪 //
+const TEMPO_LAMPEGGIO = 3000;              // lampeggia per 3 secondi (3 lampi), poi sparisce 闪 3 秒（闪 3 次），然后消失 //
+const DURATA_LAMPO = 1000;                 // un lampo al secondo 每秒闪一次 //
+const TEMPO_RICOMPARSA = 8000;             // dopo 8 secondi ricompare 消失 8 秒后重新出现 //
+let piattaforme_a_tempo = [];              // elenco delle piattaforme a tempo 所有限时平台的清单 //                         // elenco dei tetti dei tubi 所有管顶的清单 //
 const VEL_CORSA = 300;
 const ATTRITO = 1200;
 
@@ -39,6 +56,7 @@ const TASTO_SX = PP.key_codes.LEFT;
 const TASTO_DX = PP.key_codes.RIGHT;
 const TASTO_SALTO = PP.key_codes.UP;
 const TASTO_E = PP.key_codes.E; 
+const TASTO_GIU = PP.key_codes.DOWN;   // tasto per accovacciarsi 蹲下的键 //
 
 // Barra dell'acqua
 const ACQUA_MAX = 100;
@@ -59,6 +77,7 @@ let pozza_attuale = null;
 let offset_camera_y = 180;
 
 let img_tasto_e;
+let img_tubo_dentro;   // colore dell'interno del tubo 管子里面的颜色 //
 let tasto_e_sprite; 
 
 const X_INIZIO_SOTTERRANEO = 81 * QUADRATO;    
@@ -69,8 +88,9 @@ function preload(s) {
     img_verde = PP.assets.image.load_color(s, "0x76B08A", 120, 120);  
     img_piattaforma = PP.assets.image.load_color(s, "0xE36BD6", 120, 40);
     img_piattaforma_tempo = PP.assets.image.load_color(s, "0x9C60F6", 40, 40);
-    img_villager = PP.assets.image.load(s, "./assets/images/villager_120X120.png");  
+    img_villager = PP.assets.image.load(s, "./assets/images/npc1.png");  
     img_tubo = PP.assets.image.load_color(s, "0x8EAB4E", 120, 120);
+    img_tubo_dentro = PP.assets.image.load_color(s, "0x5E7A33", 120, 120);   // interno del tubo, più scuro 管子里面，颜色深一点 //
     img_edificio = PP.assets.image.load_color(s, "0x968C8C", 120, 120);
     img_acqua_tossica = PP.assets.image.load_color(s, "0x1E3529", 120, 120);  
     img_ossa = PP.assets.image.load_color(s, "0xF2DFB0", 40, 40);  
@@ -140,15 +160,100 @@ function crea_piattaforma_a_tempo(s, colonna, riga, larghezza) {
         0, 0
     );
     PP.physics.add(s, piattaforma, PP.physics.type.STATIC);
-    PP.physics.add_collider(s, personaggio, piattaforma);
+    // Salviamo il collider: ci servirà per toglierlo quando la piattaforma sparisce 把碰撞保存下来：平台消失时要用它把碰撞去掉 //
+    piattaforma.collider = PP.physics.add_collider(s, personaggio, piattaforma);
+    // Stato: "ferma" (normale), "attesa" (contando 3 s), "lampeggia", "sparita" 状态：正常 / 倒数 3 秒 / 闪烁 / 消失 //
+    piattaforma.stato = "ferma";
+    piattaforma.tempo_inizio = 0;   // quando è iniziato lo stato attuale 当前状态开始的时间 //
+    piattaforme_a_tempo.push(piattaforma);
+}
+
+// Il personaggio sta in piedi sopra questa piattaforma? 角色是不是站在这块平台上 //
+function sta_sopra(piattaforma) {
+    let bordo_sx = personaggio.geometry.x - L_PERSONAGGIO / 2;
+    let bordo_dx = personaggio.geometry.x + L_PERSONAGGIO / 2;
+    let piedi = personaggio.geometry.y + a_attuale / 2;
+    let sinistra = piattaforma.geometry.x;
+    let destra = piattaforma.geometry.x + piattaforma.geometry.display_width;
+    let sopra = piattaforma.geometry.y;
+
+    return PP.physics.is_on_ground(personaggio)
+        && Math.abs(piedi - sopra) < 5                 // i piedi toccano il bordo alto 脚贴着平台上边 //
+        && bordo_dx > sinistra && bordo_sx < destra;  // in orizzontale è sopra 横向在平台范围里 //
+}
+
+// Ogni frame aggiorna tutte le piattaforme a tempo 每一帧更新所有限时平台 //
+function aggiorna_piattaforme_a_tempo(s) {
+    let adesso = PP.timers.get_time(s);
+
+    for (let i = 0; i < piattaforme_a_tempo.length; i++) {
+        let p = piattaforme_a_tempo[i];
+        let passato = adesso - p.tempo_inizio;   // da quanto tempo è nello stato attuale 当前状态已经过了多久 //
+
+        if (p.stato == "ferma") {
+            // Il personaggio ci sale sopra: parte il conto alla rovescia 角色站上去：开始倒数 //
+            if (sta_sopra(p)) {
+                p.stato = "attesa";
+                p.tempo_inizio = adesso;
+            }
+        } else if (p.stato == "attesa") {
+            // Dopo 3 secondi inizia a lampeggiare (anche se il personaggio è saltato via) 3 秒后开始闪（就算角色已经跳走了） //
+            if (passato > TEMPO_PRIMA_DI_LAMPEGGIARE) {
+                p.stato = "lampeggia";
+                p.tempo_inizio = adesso;
+            }
+        } else if (p.stato == "lampeggia") {
+            // Un lampo al secondo: mezzo secondo visibile, mezzo secondo poco visibile 每秒闪一次：半秒亮、半秒暗 //
+            if (Math.floor(passato / (DURATA_LAMPO / 2)) % 2 == 0) {
+                p.visibility.alpha = 1;
+            } else {
+                p.visibility.alpha = 0.3;
+            }
+            // Dopo 1 secondo sparisce: nascosta e senza collisione 1 秒后消失：隐藏，并且去掉碰撞 //
+            if (passato > TEMPO_LAMPEGGIO) {
+                p.visibility.alpha = 1;
+                p.visibility.hidden = true;
+                PP.physics.remove_collider_or_overlap(s, p.collider);
+                p.stato = "sparita";
+                p.tempo_inizio = adesso;
+            }
+        } else if (p.stato == "sparita") {
+            // Dopo 3 secondi ricompare, ma solo se il personaggio non è proprio lì 3 秒后重新出现，但角色正好在那个位置时先不出现 //
+            let bordo_sx = personaggio.geometry.x - L_PERSONAGGIO / 2;
+            let bordo_dx = personaggio.geometry.x + L_PERSONAGGIO / 2;
+            let testa = personaggio.geometry.y - a_attuale / 2;
+            let piedi = personaggio.geometry.y + a_attuale / 2;
+            let occupata = bordo_dx > p.geometry.x && bordo_sx < p.geometry.x + p.geometry.display_width
+                && piedi > p.geometry.y && testa < p.geometry.y + p.geometry.display_height;
+
+            if (passato > TEMPO_RICOMPARSA && !occupata) {
+                p.visibility.hidden = false;
+                p.collider = PP.physics.add_collider(s, personaggio, p);   // rimettiamo la collisione 把碰撞加回来 //
+                p.stato = "ferma";
+            }
+        }
+    }
 }
 
 function crea_villager(s, colonna, riga) {
     PP.assets.image.add(s, img_villager, colonna * QUADRATO, riga * QUADRATO, 0, 0);
 }
 
-function crea_tubo(s, colonna, riga, larghezza, altezza) {
-    PP.assets.tilesprite.add(s, img_tubo, colonna * QUADRATO, riga * QUADRATO, larghezza * QUADRATO, altezza * QUADRATO, 0, 0);
+// Tubo: sopra un tetto solido, sotto un passaggio basso 管子：上面是实心的管顶，下面是矮通道 //
+function crea_tubo(s, colonna, riga, larghezza) {
+    let x = colonna * QUADRATO;
+    let y = riga * QUADRATO;
+    let l = larghezza * QUADRATO;
+
+    // Tetto solido: alto 120 - 80 = 40 pixel 实心管顶：高 120 - 80 = 40 像素 //
+    let tetto = PP.assets.tilesprite.add(s, img_tubo, x, y, l, QUADRATO - A_PASSAGGIO, 0, 0);
+    PP.physics.add(s, tetto, PP.physics.type.STATIC);
+    PP.physics.add_collider(s, personaggio, tetto);
+    tubi.push(tetto);   // aggiungi il tetto all'elenco 把管顶放进清单 //
+
+    // Passaggio: solo immagine, semitrasparente così si vede il personaggio dentro 通道：只有图片，半透明，才能看到里面的角色 //
+    let dentro = PP.assets.tilesprite.add(s, img_tubo_dentro, x, y + QUADRATO - A_PASSAGGIO, l, A_PASSAGGIO, 0, 0);
+    dentro.visibility.alpha = 0.5;
 }
 
 function crea_ossa(s, colonna, riga, larghezza) {
@@ -277,7 +382,7 @@ function crea_mappa(s) {
     crea_blocco(s, img_terreno, 117,  9,  4,  1);   
     crea_blocco(s, img_terreno, 117, 10,  1,  2);
 
-    crea_tubo(s, 72,  4, 9,  1);
+    crea_tubo(s, 72,  4, 9);
 
     crea_piattaforma_fissa(s,  70, 11, 3);
     crea_piattaforma_fissa(s,  78,  8, 3);
@@ -307,7 +412,8 @@ function crea_mappa(s) {
 
     crea_blocco(s, img_edificio, 76, 0, 51, 4);
 
-    crea_tubo(s,                   122,  4,  9,  1);      
+    // Tubo accorciato di un quadrato: la colonna 122 resta libera per salire dal sotterraneo 管子缩短一格：第 122 列空出来，才能从地下爬上来 //
+    crea_tubo(s,                   123,  4,  8);      
     crea_blocco(s, img_terreno,    122,  5, 12,  1);      
     crea_piattaforma_fissa(s, 381, 11, 12);               
     crea_acqua(s,                  134,  5,  3,  1, "verde");      
@@ -396,6 +502,58 @@ function crea_personaggio(s) {
     PP.physics.set_drag_x(personaggio, ATTRITO);
 }
 
+// Accovacciarsi: il personaggio diventa alto la metà 蹲下：角色变成一半高 //
+function accovacciati() {
+    accovacciato = true;
+    a_attuale = A_ACCOVACCIATO;
+    personaggio.geometry.scale_y = A_ACCOVACCIATO / A_PERSONAGGIO;   // 60 / 120 = 0.5 //
+    // si rimpicciolisce verso il centro: lo spostiamo giù di 30 così i piedi restano a terra 它会往中心缩：往下挪 30，脚才会留在地上 //
+    personaggio.geometry.y = personaggio.geometry.y + (A_PERSONAGGIO - A_ACCOVACCIATO) / 2;
+}
+
+// Alzarsi: torna alto 120 站起来：回到 120 高 //
+function alzati() {
+    accovacciato = false;
+    a_attuale = A_PERSONAGGIO;
+    personaggio.geometry.scale_y = 1;
+    personaggio.geometry.y = personaggio.geometry.y - (A_PERSONAGGIO - A_ACCOVACCIATO) / 2;
+}
+
+// Controlla se sopra la testa c'è il tetto di un tubo 检查头上是不是有管顶 //
+function sotto_un_tubo() {
+    let bordo_sx = personaggio.geometry.x - L_PERSONAGGIO / 2;
+    let bordo_dx = personaggio.geometry.x + L_PERSONAGGIO / 2;
+    let testa = personaggio.geometry.y - a_attuale / 2;
+
+    for (let i = 0; i < tubi.length; i++) {
+        let tetto = tubi[i];
+        let sinistra = tetto.geometry.x;
+        let destra = tetto.geometry.x + tetto.geometry.display_width;
+        let sotto_tetto = tetto.geometry.y + tetto.geometry.display_height;   // bordo basso del tetto 管顶的下边缘 //
+
+        let dentro_x = bordo_dx > sinistra && bordo_sx < destra;              // in orizzontale è sotto il tubo 横向在管子范围里 //
+        let dentro_y = testa >= sotto_tetto - 1 && testa < tetto.geometry.y + QUADRATO;   // la testa è nel passaggio 头在通道里 //
+
+        if (dentro_x && dentro_y) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Gestisce l'accovacciarsi ogni frame 每一帧处理蹲下 //
+function gestisci_accovacciamento(s) {
+    let tasto_giu = PP.interactive.kb.is_key_down(s, TASTO_GIU);
+
+    if (tasto_giu && !accovacciato && PP.physics.is_on_ground(personaggio)) {
+        // tiene premuto giù, è in piedi e a terra: si accovaccia 按着↓、站着、在地上：蹲下 //
+        accovacciati();
+    } else if (!tasto_giu && accovacciato && !sotto_un_tubo()) {
+        // ha lasciato giù, è accovacciato e sopra non c'è un tubo: si alza 松开↓、蹲着、头上没管子：站起来 //
+        alzati();
+    }
+}
+
 function salta(s) {
     if (PP.physics.is_on_ground(personaggio)) {
         salti = 0;
@@ -404,6 +562,7 @@ function salta(s) {
     if (
         PP.interactive.kb.is_key_just_down(s, TASTO_SALTO)
         && salti < SALTI_MAX
+        && !accovacciato          // da accovacciato non si salta 蹲着不能跳 //
     ) {
         PP.physics.set_velocity_y(personaggio, -VEL_SALTO);
         salti += 1;
@@ -411,10 +570,14 @@ function salta(s) {
 }
 
 function cammina(s) {
+    let vel = VEL_CORSA;
+    if (accovacciato) {
+        vel = VEL_ACCOVACCIATO;   // accovacciato: più lento 蹲着：慢一点 //
+    }
     if (PP.interactive.kb.is_key_down(s, TASTO_SX)) {
-        PP.physics.set_velocity_x(personaggio, -VEL_CORSA);
+        PP.physics.set_velocity_x(personaggio, -vel);
     } else if (PP.interactive.kb.is_key_down(s, TASTO_DX)) {
-        PP.physics.set_velocity_x(personaggio, VEL_CORSA);
+        PP.physics.set_velocity_x(personaggio, vel);
     } 
 }
 
@@ -437,7 +600,7 @@ function gestisci_pozze(s) {
         // Bordi del personaggio (il rettangolo si posiziona dal centro) 角色的左右边和脚底（矩形按中心定位） //
         let bordo_sx = pers_x - L_PERSONAGGIO / 2;
         let bordo_dx = pers_x + L_PERSONAGGIO / 2;
-        let piedi = pers_y + A_PERSONAGGIO / 2;
+        let piedi = pers_y + a_attuale / 2;
 
         // Sulla riva o su una piattaforma appoggiata sull'acqua: 在岸上，或者站在贴着水面的平台上： //
         // i piedi sono al massimo 45 pixel sopra la superficie (una piattaforma è alta 40) e non sotto 脚最多比水面高 45 像素（平台厚 40），也不能低于水面 //
@@ -458,7 +621,7 @@ function gestisci_pozze(s) {
                 
                 // Il tasto E appare sopra la testa del personaggio E 图标出现在角色头顶 //
                 tasto_e_sprite.geometry.x = pers_x;
-                tasto_e_sprite.geometry.y = pers_y - A_PERSONAGGIO / 2 - 40;
+                tasto_e_sprite.geometry.y = pers_y - a_attuale / 2 - 40;
                 tasto_e_sprite.visibility.hidden = false;    // mostra 显示
             }
 
@@ -478,7 +641,7 @@ function gestisci_pozze(s) {
         // Controllo sprofondamento e danno
         let pers_sinistra = pers_x - (L_PERSONAGGIO / 2);
         let pers_destra = pers_x + (L_PERSONAGGIO / 2);
-        let pers_fondo = pers_y + (A_PERSONAGGIO / 2);
+        let pers_fondo = pers_y + (a_attuale / 2);
 
         // ">" e non ">=": se il personaggio tocca solo il bordo (sulla riva) non è dentro 用 ">" 不用 ">="：只是贴着水边（站在岸上）不算在水里 //
         let dentro_x = pers_destra > pozza_x && pers_sinistra < (pozza_x + pozza_l);
@@ -536,16 +699,21 @@ function aggiorna_camera(s) {
 
     if (pozza_attuale != null) {
         // Nell'acqua la camera non scende: aumentiamo l'offset di quanto il personaggio è affondato 在水里镜头不往下跟：角色沉下去多少，偏移就加多少 //
-        let y_in_superficie = pozza_attuale.geometry.y - A_PERSONAGGIO / 2;   // centro del personaggio quando sta sulla superficie 角色站在水面高度时的中心 y //
+        let y_in_superficie = pozza_attuale.geometry.y - a_attuale / 2;   // centro del personaggio quando sta sulla superficie 角色站在水面高度时的中心 y //
         let affondato = personaggio.geometry.y - y_in_superficie;            // quanto è sceso 沉下去了多少 //
         offset_camera_y = obiettivo + affondato;   // subito, senza rallentare, così la camera resta ferma 直接设定，不做缓动，镜头就完全不动 //
     } else {
         offset_camera_y = offset_camera_y + (obiettivo - offset_camera_y) * 0.08;
     }
-    PP.camera.set_follow_offset(s, -ANTICIPO_CAMERA, offset_camera_y);
+
+    // Da accovacciato il centro del personaggio scende di 30: aggiungiamo 30 all'offset, così la camera non si muove 蹲下时角色中心往下 30：偏移也加 30，镜头就不动 //
+    let abbassato = A_PERSONAGGIO / 2 - a_attuale / 2;   // 0 in piedi, 30 accovacciato 站着是 0，蹲着是 30 //
+    PP.camera.set_follow_offset(s, -ANTICIPO_CAMERA, offset_camera_y + abbassato);
 }
 
 function update(s) {
+    aggiorna_piattaforme_a_tempo(s);   // piattaforme che lampeggiano e spariscono 会闪烁、消失的平台 //
+    gestisci_accovacciamento(s);   // prima di tutto: in piedi o accovacciato? 先决定站着还是蹲着 //
     cammina(s);
     salta(s);
     gestisci_pozze(s);    // prima le pozze, così la camera sa se il personaggio è in acqua 先检查水，镜头才知道角色在不在水里 //
