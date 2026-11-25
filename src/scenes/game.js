@@ -24,10 +24,9 @@ const A_PASSAGGIO = 2 * QUADRATINO;   // altezza del passaggio dentro il tubo (8
 let tubi = [];
 
 // Piattaforme a tempo 限时平台 //
-const TEMPO_PRIMA_DI_LAMPEGGIARE = 2000;   // 2 secondi dopo che ci sali sopra inizia a lampeggiare 站上去 2 秒后开始闪 //
-const TEMPO_LAMPEGGIO = 3000;              // lampeggia per 3 secondi (3 lampi), poi sparisce 闪 3 秒（闪 3 次），然后消失 //
+const TEMPO_PRIMA_DI_LAMPEGGIARE = 300;    // 0,3 secondi dopo che ci sali sopra inizia a lampeggiare 站上去 0.3 秒后开始闪 //
+const TEMPO_LAMPEGGIO = 3000;              // lampeggia per 3 secondi (3 lampi), poi sparisce per sempre 闪 3 秒（闪 3 次），然后永远消失 //
 const DURATA_LAMPO = 1000;                 // un lampo al secondo 每秒闪一次 //
-const TEMPO_RICOMPARSA = 8000;             // dopo 8 secondi ricompare 消失 8 秒后重新出现 //
 let piattaforme_a_tempo = [];              // elenco delle piattaforme a tempo 所有限时平台的清单 //                         // elenco dei tetti dei tubi 所有管顶的清单 //
 const VEL_CORSA = 300;
 const ATTRITO = 1200;
@@ -217,21 +216,8 @@ function aggiorna_piattaforme_a_tempo(s) {
                 p.stato = "sparita";
                 p.tempo_inizio = adesso;
             }
-        } else if (p.stato == "sparita") {
-            // Dopo 3 secondi ricompare, ma solo se il personaggio non è proprio lì 3 秒后重新出现，但角色正好在那个位置时先不出现 //
-            let bordo_sx = personaggio.geometry.x - L_PERSONAGGIO / 2;
-            let bordo_dx = personaggio.geometry.x + L_PERSONAGGIO / 2;
-            let testa = personaggio.geometry.y - a_attuale / 2;
-            let piedi = personaggio.geometry.y + a_attuale / 2;
-            let occupata = bordo_dx > p.geometry.x && bordo_sx < p.geometry.x + p.geometry.display_width
-                && piedi > p.geometry.y && testa < p.geometry.y + p.geometry.display_height;
-
-            if (passato > TEMPO_RICOMPARSA && !occupata) {
-                p.visibility.hidden = false;
-                p.collider = PP.physics.add_collider(s, personaggio, p);   // rimettiamo la collisione 把碰撞加回来 //
-                p.stato = "ferma";
-            }
         }
+        // Stato "sparita": non succede più niente, la piattaforma non ricompare 状态 "sparita"：什么都不做，平台不会再出现 //
     }
 }
 
