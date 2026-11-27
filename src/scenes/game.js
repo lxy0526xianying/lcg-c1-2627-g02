@@ -24,9 +24,9 @@ const A_PASSAGGIO = 2 * QUADRATINO;   // altezza del passaggio dentro il tubo (8
 let tubi = [];
 
 // Piattaforme a tempo 限时平台 //
-const TEMPO_PRIMA_DI_LAMPEGGIARE = 300;    // 0,3 secondi dopo che ci sali sopra inizia a lampeggiare 站上去 0.3 秒后开始闪 //
-const TEMPO_LAMPEGGIO = 3000;              // lampeggia per 3 secondi (3 lampi), poi sparisce per sempre 闪 3 秒（闪 3 次），然后永远消失 //
-const DURATA_LAMPO = 1000;                 // un lampo al secondo 每秒闪一次 //
+const TEMPO_SOPRA = 2000;        // il personaggio può restare sopra 2 secondi 角色能在上面停留 2 秒 //
+const TEMPO_CADUTA = 600;        // la piattaforma sprofonda in 0,6 secondi 平台在 0.6 秒内往下沉 //
+const DISTANZA_CADUTA = 80;      // di quanto scende mentre sprofonda (pixel) 下沉时往下移动多少像素 //
 let piattaforme_a_tempo = [];              // elenco delle piattaforme a tempo 所有限时平台的清单 //                         // elenco dei tetti dei tubi 所有管顶的清单 //
 const VEL_CORSA = 300;
 const ATTRITO = 1200;
@@ -161,7 +161,7 @@ function crea_piattaforma_a_tempo(s, colonna, riga, larghezza) {
     PP.physics.add(s, piattaforma, PP.physics.type.STATIC);
     // Salviamo il collider: ci servirà per toglierlo quando la piattaforma sparisce 把碰撞保存下来：平台消失时要用它把碰撞去掉 //
     piattaforma.collider = PP.physics.add_collider(s, personaggio, piattaforma);
-    // Stato: "ferma" (normale), "attesa" (contando 3 s), "lampeggia", "sparita" 状态：正常 / 倒数 3 秒 / 闪烁 / 消失 //
+    // Stato: "ferma" (normale), "attesa" (contando 2 s), "sprofonda", "sparita" 状态：正常 / 倒数 2 秒 / 下沉 / 消失 //
     piattaforma.stato = "ferma";
     piattaforma.tempo_inizio = 0;   // quando è iniziato lo stato attuale 当前状态开始的时间 //
     piattaforme_a_tempo.push(piattaforma);
@@ -196,25 +196,26 @@ function aggiorna_piattaforme_a_tempo(s) {
                 p.tempo_inizio = adesso;
             }
         } else if (p.stato == "attesa") {
-            // Dopo 3 secondi inizia a lampeggiare (anche se il personaggio è saltato via) 3 秒后开始闪（就算角色已经跳走了） //
-            if (passato > TEMPO_PRIMA_DI_LAMPEGGIARE) {
-                p.stato = "lampeggia";
-                p.tempo_inizio = adesso;
-            }
-        } else if (p.stato == "lampeggia") {
-            // Un lampo al secondo: mezzo secondo visibile, mezzo secondo poco visibile 每秒闪一次：半秒亮、半秒暗 //
-            if (Math.floor(passato / (DURATA_LAMPO / 2)) % 2 == 0) {
-                p.visibility.alpha = 1;
-            } else {
-                p.visibility.alpha = 0.3;
-            }
-            // Dopo 1 secondo sparisce: nascosta e senza collisione 1 秒后消失：隐藏，并且去掉碰撞 //
-            if (passato > TEMPO_LAMPEGGIO) {
-                p.visibility.alpha = 1;
-                p.visibility.hidden = true;
+            // Dopo 2 secondi cede: togliamo subito la collisione, il personaggio cade 2 秒后塌掉：马上去掉碰撞，角色掉下去 //
+            if (passato > TEMPO_SOPRA) {
                 PP.physics.remove_collider_or_overlap(s, p.collider);
-                p.stato = "sparita";
+                p.y_iniziale = p.geometry.y;   // ricordiamo da dove parte 记住它原来的位置 //
+                p.stato = "sprofonda";
                 p.tempo_inizio = adesso;
+            }
+        } else if (p.stato == "sprofonda") {
+            // Sprofonda: scende piano e diventa trasparente (niente lampeggio) 下沉：慢慢往下移，同时变透明（不闪烁） //
+            let avanzamento = passato / TEMPO_CADUTA;   // da 0 (inizio) a 1 (fine) 从 0（开始）到 1（结束） //
+            if (avanzamento > 1) {
+                avanzamento = 1;
+            }
+            p.geometry.y = p.y_iniziale + DISTANZA_CADUTA * avanzamento;
+            p.visibility.alpha = 1 - avanzamento;
+
+            // Finito di sprofondare: nascosta per sempre 沉完了：永远隐藏 //
+            if (avanzamento == 1) {
+                p.visibility.hidden = true;
+                p.stato = "sparita";
             }
         }
         // Stato "sparita": non succede più niente, la piattaforma non ricompare 状态 "sparita"：什么都不做，平台不会再出现 //
@@ -698,7 +699,7 @@ function aggiorna_camera(s) {
 }
 
 function update(s) {
-    aggiorna_piattaforme_a_tempo(s);   // piattaforme che lampeggiano e spariscono 会闪烁、消失的平台 //
+    aggiorna_piattaforme_a_tempo(s);   // piattaforme che sprofondano e spariscono 会下沉、消失的平台 //
     gestisci_accovacciamento(s);   // prima di tutto: in piedi o accovacciato? 先决定站着还是蹲着 //
     cammina(s);
     salta(s);
